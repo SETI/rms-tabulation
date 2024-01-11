@@ -120,3 +120,73 @@ class Test_Tabulation(unittest.TestCase):
         # square_width()
         self.assertEqual(triangle.square_width(), 10.)
         self.assertEqual(boxcar.square_width(), 99.)
+
+
+        # Not 1 dimensional x
+        x = np.array([[1, 2], [3, 4]])  # 2-dimensional array
+        y = np.array([4, 5])
+        with self.assertRaises(ValueError) as context:
+            Tabulation(x, y)
+        self.assertEqual(str(context.exception), "x array in not 1-dimensional")
+
+        # Test initialization with x and y arrays of different sizes
+        x = np.array([1, 2, 3])
+        y = np.array([4, 5])  # Mismatched size
+        with self.assertRaises(ValueError) as context:
+            Tabulation(x, y)
+        self.assertEqual(str(context.exception), "x and y arrays do not have the same size")
+
+        # Test initialization with a non-monotonic x array
+        x = np.array([1, 3, 2])  # Non-monotonic
+        y = np.array([4, 5, 6])
+        with self.assertRaises(ValueError) as context:
+            Tabulation(x, y)
+        self.assertEqual(str(context.exception), "x-coordinates are not monotonic")
+
+        # Test update with new_y set to None
+        x = np.array([1, 2, 3])
+        y = np.array([4, 5, 6])
+        tab = Tabulation(x, y)
+        result = tab._update_y(None)
+        self.assertIs(result, tab)  # Should return the original object
+
+        # Test update with new_y having a different size than x
+        x = np.array([1, 2, 3])
+        y = np.array([4, 5, 6])
+        tab = Tabulation(x, y)
+        new_y = np.array([7, 8])  # Mismatched size
+        with self.assertRaises(ValueError) as context:
+            tab._update_y(new_y)
+        self.assertEqual(str(context.exception), "x and y arrays do not have the same size")
+
+        # Test xmerge with non-overlapping domains
+        x1 = np.array([1, 2, 3])
+        x2 = np.array([4, 5, 6])
+        with self.assertRaises(ValueError) as context:
+            result = Tabulation._xmerge(x1, x2)
+        self.assertEqual(str(context.exception), "domains do not overlap")
+
+        # Test in-place multiplication of two Tabulations
+        x1 = np.array([1, 2, 3])
+        y1 = np.array([4, 5, 6])
+        tab1 = Tabulation(x1, y1)
+
+        x2 = np.array([2, 3, 4])
+        y2 = np.array([1, 2, 3])
+        tab2 = Tabulation(x2, y2)
+
+        tab1 *= tab2
+        expected_x = np.array([2, 3])  # Intersection of x1 and x2
+        expected_y = y1[1:] * y2[:-1]
+        np.testing.assert_array_equal(tab1.x, expected_x)
+        np.testing.assert_array_equal(tab1.y, expected_y)
+
+        # # Test in-place multiplication with a scalar
+        x = np.array([1, 2, 3])
+        y = np.array([4, 5, 6])
+        tab = Tabulation(x, y)
+        scalar_value = 2.0
+
+        tab *= scalar_value
+        expected_y = y * scalar_value
+        np.testing.assert_array_equal(tab.y, expected_y)

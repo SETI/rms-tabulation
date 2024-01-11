@@ -66,9 +66,12 @@ class Tabulation(object):
     def _update_y(self, new_y):
         """Updates a tabulation in place with a new y array."""
 
-        y = np.asfarray(y)
+        if new_y is None:
+            return self  # If new_y is None, do nothing and return the original object
 
-        if new_y.shape != self.x.shape:
+        y = np.asfarray(new_y)
+
+        if y.shape != self.x.shape:
             raise ValueError("x and y arrays do not have the same size")
 
         self.y = y
@@ -340,6 +343,10 @@ class Tabulation(object):
 
     def resample(self, new_x):
         """Re-samples a tabulation at a given list of x-values."""
+
+        if new_x is None:
+            # If new_x is None, return a copy of the current tabulation
+            return Tabulation(self.x, self.y.copy())
 
         return Tabulation(new_x, self(new_x))
 
