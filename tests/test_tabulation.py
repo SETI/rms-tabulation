@@ -178,8 +178,8 @@ class Test_Tabulation(unittest.TestCase):
         tab1 *= tab2
         expected_x = np.array([2, 3])  # Intersection of x1 and x2
         expected_y = y1[1:] * y2[:-1]
-        np.testing.assert_array_equal(tab1.x, expected_x)
-        np.testing.assert_array_equal(tab1.y, expected_y)
+        self.assertTrue(np.array_equal(tab1.x, expected_x))
+        self.assertTrue(np.array_equal(tab1.y, expected_y))
 
         # # Test in-place multiplication with a scalar
         x = np.array([1, 2, 3])
@@ -189,4 +189,40 @@ class Test_Tabulation(unittest.TestCase):
 
         tab *= scalar_value
         expected_y = y * scalar_value
-        np.testing.assert_array_equal(tab.y, expected_y)
+        self.assertTrue(np.array_equal(tab.y, expected_y))
+
+
+        # Test in-place division of two Tabulations
+        x1 = np.array([1, 2, 3])
+        y1 = np.array([4, 5, 6])
+        tab1 = Tabulation(x1, y1)
+
+        x2 = np.array([2, 3, 4])
+        y2 = np.array([1, 2, 3])
+        tab2 = Tabulation(x2, y2)
+
+        result = tab1.__idiv__(tab2)
+
+        expected_x = np.array([2, 3])  # Intersection of x1 and x2
+        expected_y = y1[1:] / y2[:-1]
+
+        self.assertTrue(np.array_equal(result.x, expected_x))
+        self.assertTrue(np.array_equal(result.y, expected_y))
+
+
+        # Test subtraction of two Tabulations
+        # x1 = np.array([1, 2, 3])
+        # y1 = np.array([4, 5, 6])
+        # tab1 = Tabulation(x1, y1)
+
+        # x2 = np.array([2, 3, 4])
+        # y2 = np.array([1, 2, 3])
+        # tab2 = Tabulation(x2, y2)
+
+        # result = tab1.__sub__(tab2)
+
+        # expected_x = np.array([1., 2., 3., 4.])  # Merged x values (float)
+        # expected_y = np.array([3, 3, 3, -3])  # Result of subtraction
+
+        # self.assertTrue(np.array_equal(result.x, expected_x))
+        # self.assertTrue(np.array_equal(result.y, expected_y))
