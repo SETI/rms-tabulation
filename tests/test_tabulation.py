@@ -121,7 +121,6 @@ class Test_Tabulation(unittest.TestCase):
         self.assertEqual(triangle.square_width(), 10.)
         self.assertEqual(boxcar.square_width(), 99.)
 
-
         # Not 1 dimensional x
         x = np.array([[1, 2], [3, 4]])  # 2-dimensional array
         y = np.array([4, 5])
@@ -166,9 +165,24 @@ class Test_Tabulation(unittest.TestCase):
             result = Tabulation._xmerge(x1, x2)
         self.assertEqual(str(context.exception), "domains do not overlap")
 
+        # resample where x=None
+        x = np.array([1, 2, 3])
+        y = np.array([4, 5, 6])
+
+        tab = Tabulation(x,y)
+
+        resampled = tab.resample(None)
+
+        self.assertTrue(np.all(resampled.x == x))
+        self.assertTrue(np.all(resampled.y == y))
+
+        # bandwidth_rms with dx=None
+        boxcar = Tabulation((0.,10.),(1.,1.))
+        value = 5
+
+        self.assertTrue(np.abs(boxcar.bandwidth_rms() - value) == 0.)
 
         # Test multiplication of Two Tabulations
-
         x1 = np.array([1, 2, 3])
         y1 = np.array([4, 5, 6])
         tab1 = Tabulation(x1, y1)
@@ -179,13 +193,11 @@ class Test_Tabulation(unittest.TestCase):
 
         result = tab1 * tab2
 
-        print(result.y)
-
         expected_x = [1, 2, 3] # Merged x values
 
         self.assertTrue(np.array_equal(result.x, expected_x))
+        self.assertTrue(np.array_equal(result(x), tab1(x) * tab2(x)))
         self.assertTrue(np.array_equal(result.y, tab1.y * tab2.y))
-
 
         # Test multiplication of Two Tabulations with a scalar
         x = np.array([1, 2, 3])
@@ -195,8 +207,174 @@ class Test_Tabulation(unittest.TestCase):
         scalar = 2
 
         result = tab * scalar
-        
-        self.assertTrue(np.array_equal(result.y, tab.y * scalar))
+
+        assert np.array_equal(result(x), tab(x) * scalar)
+        assert np.array_equal(result.y, tab.y * scalar)
+
+        # Testing multiplication with bad array
+        x = np.array([1, 2, 3])
+        y = np.array([4, 5, 6])
+        tab = Tabulation(x, y)
+
+        bad_array = np.array([])
+        with self.assertRaises(ValueError) as context:
+            result = tab * bad_array
+        self.assertEqual(
+            str(context.exception),
+            "Cannot multiply Tabulation by given value"
+            )
+
+        # Test in-place multiplication of two Tabulations
+        x1 = np.array([1, 2, 3])
+        y1 = np.array([4, 5, 6])
+        tab1 = Tabulation(x1, y1)
+
+        x2 = np.array([1, 2, 3])
+        y2 = np.array([1, 2, 3])
+        tab2 = Tabulation(x2, y2)
+
+        tab1.__imul__(tab2)
+        expected_x = np.array([1, 2, 3])  # Intersection of x1 and x2
+        expected_y = [4., 10., 18.]
+
+        assert np.array_equal(expected_x, tab1.x)
+        assert np.array_equal(expected_y, tab1.y)
+        assert np.array_equal(expected_y, tab1(x1))
+
+        # Test in-place multiplication with a scalar
+        x = np.array([1, 2, 3])
+        y = np.array([4, 5, 6])
+        tab = Tabulation(x, y)
+        scalar_value = 2.0
+
+        tab.__imul__(scalar_value)
+        expected_y = y * scalar_value
+        self.assertTrue(np.array_equal(expected_y, tab.y))
+        self.assertTrue(np.array_equal(expected_y, tab(x)))
+
+        # Testing in-place multiplication with bad array
+        x = np.array([1, 2, 3])
+        y = np.array([4, 5, 6])
+        tab = Tabulation(x, y)
+
+        bad_array = np.array([])
+        with self.assertRaises(ValueError) as context:
+            tab.__imul__(bad_array)
+        self.assertEqual(
+            str(context.exception),
+            "Cannot multiply Tabulation in-place by given value"
+            )
+
+        # Test in-place division of two Tabulations
+        x1 = np.array([1, 2, 3])
+        y1 = np.array([4, 5, 6])
+        tab1 = Tabulation(x1, y1)
+
+        x2 = np.array([1, 2, 3])
+        y2 = np.array([1, 2, 3])
+        tab2 = Tabulation(x2, y2)
+
+        tab1.__idiv__(tab2)
+
+        expected_x = np.array([1., 2., 3.])  # Intersection of x1 and x2
+        expected_y = np.array([4., 2.5, 2.])
+
+        self.assertTrue(np.array_equal(expected_x, tab1.x))
+        self.assertTrue(np.array_equal(expected_y, tab1.y))
+        self.assertTrue(np.array_equal(expected_y, tab1(x1)))
+
+        # Test in-place division of a Tabulations with a scalar
+        x = np.array([1, 2, 3])
+        y = np.array([4, 5, 6])
+        tab = Tabulation(x, y)
+        scalar_value = 2.0
+
+        tab.__idiv__(scalar_value)
+        expected_y = y / scalar_value
+        self.assertTrue(np.array_equal(expected_y, tab.y))
+        self.assertTrue(np.array_equal(expected_y, tab(x)))
+
+        # Testing division with a bad array
+        x = np.array([1, 2, 3])
+        y = np.array([4, 5, 6])
+        tab = Tabulation(x, y)
+
+        bad_array = np.array([])
+        with self.assertRaises(ValueError) as context:
+            result = tab / bad_array
+        self.assertEqual(
+            str(context.exception),
+            "Cannot divide Tabulation by given value"
+            )
+
+        # Testing in-place division with a bad array
+        x = np.array([1, 2, 3])
+        y = np.array([4, 5, 6])
+        tab = Tabulation(x, y)
+
+        bad_array = np.array([])
+        with self.assertRaises(ValueError) as context:
+            tab.__idiv__(bad_array)
+        self.assertEqual(
+            str(context.exception),
+            "Cannot divide Tabulation in-place by given value"
+            )
+
+        # Test addition of two Tabulations with a scalar
+        x = np.array([1, 2, 3])
+        y = np.array([4, 5, 6])
+        tab = Tabulation(x, y)
+
+        scalar = 2
+
+        tab.__iadd__(scalar)
+
+        self.assertTrue(np.array_equal(tab.x, np.array([1, 2, 3])))
+        self.assertTrue(np.array_equal(tab.y, np.array([4, 5, 6]) + scalar))
+        self.assertTrue(np.array_equal(tab(x), np.array([4, 5, 6]) + scalar))
+
+        # Test in-place addition of two Tabulations
+        x1 = np.array([1, 2, 3])
+        y1 = np.array([4, 5, 6])
+        tab1 = Tabulation(x1, y1)
+
+        x2 = np.array([1, 2, 3])
+        y2 = np.array([1, 2, 3])
+        tab2 = Tabulation(x2, y2)
+
+        tab1.__iadd__(tab2)
+        expected_x = np.array([1, 2, 3])  # Merge of x1 and x2
+        expected_y = np.array([6, 9, 12])
+
+        self.assertTrue(np.array_equal(expected_x, tab1.x))
+        self.assertTrue(np.array_equal(expected_y, tab1.y + tab2.y))
+        self.assertTrue(np.array_equal(expected_y, tab1(x1) + tab2(x2)))
+
+        # Testing in-place addition with a bad array
+        x = np.array([1, 2, 3])
+        y = np.array([4, 5, 6])
+        tab = Tabulation(x, y)
+
+        bad_array = np.array([])
+        with self.assertRaises(ValueError) as context:
+            tab.__iadd__(bad_array)
+        self.assertEqual(
+            str(context.exception),
+            "Cannot add Tabulation in-place by given value"
+            )
+
+        # Testing addition with a bad array
+        x = np.array([1, 2, 3])
+        y = np.array([4, 5, 6])
+        tab = Tabulation(x, y)
+
+        bad_array = np.array([])
+        with self.assertRaises(ValueError) as context:
+            result = tab + bad_array
+        self.assertEqual(
+            str(context.exception),
+            "Cannot add Tabulation by given value"
+            )
 
         # Test subtraction of Two Tabulations 
         x1 = np.array([1, 2, 3])
@@ -213,92 +391,20 @@ class Test_Tabulation(unittest.TestCase):
 
         self.assertTrue(np.array_equal(result.x, expected_x))
         self.assertTrue(np.array_equal(result.y, tab1.y - tab2.y))
+        self.assertTrue(np.array_equal(result(x1), tab1(x1) - tab2(x2)))
 
-
-        # Test addition of two tabulations with a scalar
+        # Testing subtraction with a bad array
         x = np.array([1, 2, 3])
         y = np.array([4, 5, 6])
         tab = Tabulation(x, y)
 
-        scalar = 2
-
-        tab.__iadd__(scalar)
-
-        assert np.array_equal(tab.x, np.array([1, 2, 3]))
-        assert np.array_equal(tab.y, np.array([4, 5, 6]) + scalar)
-
-
-        # in-place additions
-        x1 = np.array([1, 2, 3])
-        y1 = np.array([4, 5, 6])
-        tab1 = Tabulation(x1, y1)
-
-        x2 = np.array([1, 2, 3])
-        y2 = np.array([1, 2, 3])
-        tab2 = Tabulation(x2, y2)
-
-        tab1.__iadd__(tab2)
-        expected_x = np.array([1, 2, 3])  # Merge of x1 and x2
-        expected_y = np.array([6, 9, 12])
-
-        assert np.array_equal(expected_x, tab1.x)
-        assert np.array_equal(expected_y, tab1.y + tab2.y)
-
-
-        # Test in-place multiplication of two Tabulations
-        x1 = np.array([1, 2, 3])
-        y1 = np.array([4, 5, 6])
-        tab1 = Tabulation(x1, y1)
-
-        x2 = np.array([2, 3, 4])
-        y2 = np.array([1, 2, 3])
-        tab2 = Tabulation(x2, y2)
-
-        tab1.__imul__(tab2)
-        expected_x = np.array([2, 3])  # Intersection of x1 and x2
-        expected_y = y1[1:] * y2[:-1]
-        self.assertTrue(np.array_equal(tab1.x, expected_x))
-        self.assertTrue(np.array_equal(tab1.y, expected_y))
-
-        # # Test in-place multiplication with a scalar
-        x = np.array([1, 2, 3])
-        y = np.array([4, 5, 6])
-        tab = Tabulation(x, y)
-        scalar_value = 2.0
-
-        tab.__imul__(scalar_value)
-        expected_y = y * scalar_value
-        self.assertTrue(np.array_equal(tab.y, expected_y))
-
-
-        # Test in-place division of two Tabulations
-        x1 = np.array([1, 2, 3])
-        y1 = np.array([4, 5, 6])
-        tab1 = Tabulation(x1, y1)
-
-        x2 = np.array([2, 3, 4])
-        y2 = np.array([1, 2, 3])
-        tab2 = Tabulation(x2, y2)
-
-        result = tab1.__idiv__(tab2)
-
-        expected_x = np.array([2, 3])  # Intersection of x1 and x2
-        expected_y = y1[1:] / y2[:-1]
-
-        self.assertTrue(np.array_equal(result.x, expected_x))
-        self.assertTrue(np.array_equal(result.y, expected_y))
-
-
-        # In-place division with a scalar
-        x = np.array([1, 2, 3])
-        y = np.array([4, 5, 6])
-        tab = Tabulation(x, y)
-        scalar_value = 2.0
-
-        tab.__idiv__(scalar_value)
-        expected_y = y / scalar_value
-        assert np.array_equal(tab.y, expected_y)
-
+        bad_array = np.array([])
+        with self.assertRaises(ValueError) as context:
+            result = tab - bad_array
+        self.assertEqual(
+            str(context.exception),
+            "Cannot subtract Tabulation by given value"
+            )
 
         # Test in-place subtraction of two Tabulations
         x1 = np.array([1, 2, 3])
@@ -313,38 +419,33 @@ class Test_Tabulation(unittest.TestCase):
         expected_x = np.array([1, 2, 3])  # Merge of x1 and x2
         expected_y = np.array([2, 1, 0])
 
-        assert np.array_equal(expected_x, tab1.x)
-        assert np.array_equal(expected_y, tab1.y - tab2.y)
-
+        self.assertTrue(np.array_equal(expected_x, tab1.x))
+        self.assertTrue(np.array_equal(expected_y, tab1.y - tab2.y))
+        self.assertTrue(np.array_equal(expected_y, tab1(x1) - tab2(x2)))
 
         # Test in-place subtraction of two Tabulations with a scalar
         x = np.array([1, 2, 3])
         y = np.array([4, 5, 6])
         tab = Tabulation(x, y)
 
-        # Define a scalar value
         scalar = 2
-        # Perform the in-place subtraction
-        tab.__isub__(scalar)
-        # Assert that the x-values remain the same
-        self.assertTrue(np.array_equal(tab.x, np.array([1, 2, 3])))
-        # Assert that the y-values have been subtracted correctly
-        self.assertTrue(np.array_equal(tab.y, np.array([4, 5, 6]) - scalar))
 
-        # resample where x=None
+        tab.__isub__(scalar)
+
+        self.assertTrue(np.array_equal(tab.x, np.array([1, 2, 3])))
+        self.assertTrue(np.array_equal(tab.y, np.array([4, 5, 6]) - scalar))
+        self.assertTrue(np.array_equal(tab(x), np.array([4, 5, 6]) - scalar))
+
+        # Testing subtraction in-place with a bad array
         x = np.array([1, 2, 3])
         y = np.array([4, 5, 6])
+        tab = Tabulation(x, y)
 
-        tab = Tabulation(x,y)
-
-        resampled = tab.resample(None)
-
-        assert np.all(resampled.x == x)
-        assert np.all(resampled.y == y)
-
-        # bandwidth_rms with dx=None
-        boxcar = Tabulation((0.,10.),(1.,1.))
-        value = 5
-
-        assert np.abs(boxcar.bandwidth_rms() - value) == 0.
+        bad_array = np.array([])
+        with self.assertRaises(ValueError) as context:
+            tab.__isub__(bad_array)
+        self.assertEqual(
+            str(context.exception),
+            "Cannot subtract Tabulation in-place by given value"
+            )
         
