@@ -46,7 +46,7 @@ class Tabulation(object):
         sorted = np.sort(x)
 
         if len(x.shape) != 1:
-            raise ValueError("x array in not 1-dimensional")
+            raise ValueError("x array is not 1-dimensional")
 
         if x.shape != y.shape:
             raise ValueError("x and y arrays do not have the same size")
@@ -66,9 +66,9 @@ class Tabulation(object):
     def _update_y(self, new_y):
         """Updates a tabulation in place with a new y array."""
 
-        y = np.asfarray(y)
+        y = np.asfarray(new_y)
 
-        if new_y.shape != self.x.shape:
+        if y.shape != self.x.shape:
             raise ValueError("x and y arrays do not have the same size")
 
         self.y = y
@@ -109,7 +109,7 @@ class Tabulation(object):
         return (x[mask], y[mask])
 
     @staticmethod
-    def _xmerge(x1,x2):
+    def _xmerge(x1, x2):
         """Returns a new array of x-values containing the union of x-values
         found in each of the given arrays.
         """
@@ -122,7 +122,7 @@ class Tabulation(object):
         sorted = np.sort(np.hstack((x1, x2)))
 
         # Locate and remove duplicates
-        mask = np.hstack((sorted[:-1] != sorted[1:], [True]))
+        mask = np.append(sorted[:-1] != sorted[1:], True)
         return sorted[mask]
 
     @staticmethod
@@ -141,7 +141,6 @@ class Tabulation(object):
 ########################################
 
     def __call__(self, x):
-
         # Fill in the 1-D interpolation if necessary
         if self.func is None:
             self.func = interp1d(self.x, self.y, kind="linear",
@@ -149,8 +148,8 @@ class Tabulation(object):
 
         if np.shape(x):
             return self.func(x)
-        else:
-            return float(self.func(x)[()])
+
+        return float(self.func(x))
 
     def __mul__(self, other):
 
@@ -163,6 +162,8 @@ class Tabulation(object):
         # Otherwise just scale the y-values
         elif np.shape(other) == ():
             return Tabulation(self.x, self.y * other)
+        
+        raise ValueError("Cannot multiply Tabulation by given value")
 
     def __truediv__(self, other):
 
@@ -175,6 +176,8 @@ class Tabulation(object):
         # Otherwise just scale the y-values
         elif np.shape(other) == ():
             return Tabulation(self.x, self.y / other)
+        
+        raise ValueError("Cannot divide Tabulation by given value")
 
     def __add__(self, other):
 
@@ -187,6 +190,8 @@ class Tabulation(object):
         # Otherwise just shift the y-values
         elif np.shape(other) == ():
             return Tabulation(self.x, self.y + other)
+        
+        raise ValueError("Cannot add Tabulation by given value")
 
         # Note that a constant added to a Tabulation will still return zero
         # outside the domain.
@@ -202,6 +207,8 @@ class Tabulation(object):
         # Otherwise just shift the y-values
         elif np.shape(other) == ():
             return Tabulation(self.x, self.y - other)
+        
+        raise ValueError("Cannot subtract Tabulation by given value")
 
         # Note that a constant subtracted from a Tabulation will still return
         # zero outside the domain.
@@ -216,8 +223,10 @@ class Tabulation(object):
         # Otherwise just scale the y-values
         elif np.shape(other) == ():
             return self._update_y(self.y * other)
+        
+        raise ValueError("Cannot multiply Tabulation in-place by given value")
 
-    def __idiv__(self, other):
+    def __itruediv__(self, other):
 
         # In-place division of two Tabulations
         if type(other) == type(self):
@@ -227,6 +236,8 @@ class Tabulation(object):
         # Otherwise just scale the y-values
         elif np.shape(other) == ():
             return self._update_y(self.y / other)
+        
+        raise ValueError("Cannot divide Tabulation in-place by given value")
 
     def __iadd__(self, other):
 
@@ -242,6 +253,8 @@ class Tabulation(object):
         # Note that a constant added to a Tabulation will still return zero
         # outside the domain.
 
+        raise ValueError("Cannot add Tabulation in-place by given value")
+
     def __isub__(self, other):
 
         # In-place subtraction of two Tabulations
@@ -255,6 +268,7 @@ class Tabulation(object):
 
         # Note that a constant subtracted from a Tabulation will still return
         # zero outside the domain.
+        raise ValueError("Cannot subtract Tabulation in-place by given value")
 
 ########################################
 # Additional methods
@@ -340,6 +354,10 @@ class Tabulation(object):
 
     def resample(self, new_x):
         """Re-samples a tabulation at a given list of x-values."""
+
+        if new_x is None:
+            # If new_x is None, return a copy of the current tabulation
+            return Tabulation(self.x, self.y.copy())
 
         return Tabulation(new_x, self(new_x))
 
