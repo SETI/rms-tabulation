@@ -242,6 +242,7 @@ class Tabulation(object):
         # Note that a constant added to a Tabulation will still return zero
         # outside the domain.
 
+
     def __isub__(self, other):
 
         # In-place subtraction of two Tabulations
