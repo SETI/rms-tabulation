@@ -13,7 +13,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 
 try:
-    from _version import __version__
+    from ._version import __version__
 except ImportError as err:
     __version__ = 'Version unspecified'
 
@@ -162,7 +162,7 @@ class Tabulation(object):
         # Otherwise just scale the y-values
         elif np.shape(other) == ():
             return Tabulation(self.x, self.y * other)
-        
+
         raise ValueError("Cannot multiply Tabulation by given value")
 
     def __truediv__(self, other):
@@ -176,7 +176,7 @@ class Tabulation(object):
         # Otherwise just scale the y-values
         elif np.shape(other) == ():
             return Tabulation(self.x, self.y / other)
-        
+
         raise ValueError("Cannot divide Tabulation by given value")
 
     def __add__(self, other):
@@ -190,7 +190,7 @@ class Tabulation(object):
         # Otherwise just shift the y-values
         elif np.shape(other) == ():
             return Tabulation(self.x, self.y + other)
-        
+
         raise ValueError("Cannot add Tabulation by given value")
 
         # Note that a constant added to a Tabulation will still return zero
@@ -207,7 +207,7 @@ class Tabulation(object):
         # Otherwise just shift the y-values
         elif np.shape(other) == ():
             return Tabulation(self.x, self.y - other)
-        
+
         raise ValueError("Cannot subtract Tabulation by given value")
 
         # Note that a constant subtracted from a Tabulation will still return
@@ -223,7 +223,7 @@ class Tabulation(object):
         # Otherwise just scale the y-values
         elif np.shape(other) == ():
             return self._update_y(self.y * other)
-        
+
         raise ValueError("Cannot multiply Tabulation in-place by given value")
 
     def __itruediv__(self, other):
@@ -236,7 +236,7 @@ class Tabulation(object):
         # Otherwise just scale the y-values
         elif np.shape(other) == ():
             return self._update_y(self.y / other)
-        
+
         raise ValueError("Cannot divide Tabulation in-place by given value")
 
     def __iadd__(self, other):
