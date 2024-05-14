@@ -25,7 +25,7 @@
 
 PDS Ring-Moon Systems Node, SETI Institute
 
-Supported versions: Python >= 3.7
+Supported versions: Python >= 3.8
 
 The Tabulation class represents a function by a sequence of linear
 interpolations between points defined by arrays of x and y coordinates.
