@@ -41,8 +41,8 @@ class Tabulation(object):
     def _update(self, x, y):
         """Updates a tabulation in place with new x and y arrays."""
 
-        x = np.asfarray(x)
-        y = np.asfarray(y)
+        x = np.asarray(x, dtype=np.double)
+        y = np.asarray(y, dtype=np.double)
         sorted = np.sort(x)
 
         if len(x.shape) != 1:
@@ -66,7 +66,7 @@ class Tabulation(object):
     def _update_y(self, new_y):
         """Updates a tabulation in place with a new y array."""
 
-        y = np.asfarray(new_y)
+        y = np.asarray(new_y, dtype=np.double)
 
         if y.shape != self.x.shape:
             raise ValueError("x and y arrays do not have the same size")
