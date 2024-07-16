@@ -37,6 +37,7 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/SETI/rms-tabulation"
+Documentation = "https://rms-tabulation.readthedocs.io/en/latest"
 Repository = "https://github.com/SETI/rms-tabulation"
 Source = "https://github.com/SETI/rms-tabulation"
 Issues = "https://github.com/SETI/rms-tabulation/issues"

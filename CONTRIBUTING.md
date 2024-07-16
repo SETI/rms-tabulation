@@ -99,7 +99,7 @@ We use GitHub Issues to track enhancement requests. If you want to suggest an en
 
 ## I Want To Contribute Code
 
-> ### Legal Notice 
+> ### Legal Notice
 > When contributing to this project, you must agree that you have authored 100% of the content, that you have the necessary rights to the content, and that the content you contribute may be provided under the project license.
 
 We welcome all code contributions, including bug fixes, new features, and improvements to documentation.
