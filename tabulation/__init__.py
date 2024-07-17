@@ -15,7 +15,7 @@ from scipy.interpolate import interp1d
 
 try:
     from ._version import __version__
-except ImportError:
+except ImportError:  # pragma: no cover
     __version__ = 'Version unspecified'
 
 

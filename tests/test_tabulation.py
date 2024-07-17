@@ -12,6 +12,14 @@ class Test_Tabulation(unittest.TestCase):
 
     def runTest(self):
 
+        x = [0, 1, 2, 3, 4, 5, 6, 7]
+        y = [0, 0, 0, 1, 2, 3, 0, 0]
+        tab = Tabulation(x, y)
+        self.assertEqual(tab.domain(), (0., 7.))
+        tab1 = tab.trim()
+        self.assertEqual(tab.domain(), (0., 7.))
+        self.assertEqual(tab1.domain(), (2., 6.))
+
         x = np.arange(11)
         y = np.arange(11)
 
@@ -22,6 +30,9 @@ class Test_Tabulation(unittest.TestCase):
         self.assertEqual(0., tab(10.000000001))
 
         self.assertEqual(tab.domain(), (0., 10.))
+        tab1 = tab.trim()
+        self.assertEqual(tab.domain(), (0., 10.))
+        self.assertEqual(tab1.domain(), (0., 10.))
 
         reversed = Tabulation(x[::-1], y)
         self.assertEqual(4., reversed(6))
@@ -35,6 +46,12 @@ class Test_Tabulation(unittest.TestCase):
         self.assertTrue(np.all(resampled.y == resampled.x))
 
         resampled = tab.resample(np.array((0., 10.)))
+        self.assertTrue(np.all(resampled.y == resampled.x))
+
+        subsampled = tab.subsample(np.array([5.2, 5.5, 6., 7.]))
+        self.assertTrue(np.all(subsampled.x ==
+                               np.array([0., 1., 2., 3., 4., 5., 5.2, 5.5,
+                                         6., 7., 8., 9., 10.])))
         self.assertTrue(np.all(resampled.y == resampled.x))
 
         xlist = np.arange(0., 10.25, 0.25)
@@ -112,6 +129,18 @@ class Test_Tabulation(unittest.TestCase):
 
         triangle = Tabulation((0, 10, 20), (0, 1, 0))
         self.assertEqual(triangle.fwhm(0.25), 15.)
+
+        less_triangle = Tabulation((0, 10), (0, 1))
+        with self.assertRaises(ValueError) as context:
+            less_triangle.fwhm(0.5)
+        self.assertEqual(str(context.exception),
+                         "Tabulation does not cross fractional height twice")
+
+        more_triangle = Tabulation((0, 10, 20, 30), (0, 1, 0, 1))
+        with self.assertRaises(ValueError) as context:
+            more_triangle.fwhm(0.5)
+        self.assertEqual(str(context.exception),
+                         "Tabulation does not cross fractional height twice")
 
         # square_width()
         self.assertEqual(triangle.square_width(), 10.)
