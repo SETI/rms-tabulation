@@ -24,21 +24,27 @@ class Tabulation(object):
 
     The interpolations are defined between points defined by arrays of x and y
     coordinates. The function is treated as equal to zero outside the range of the x
-    coordinates. However, if supplied, one leading and/or trailing zero is considered
-    significant because it anchors the interpolation at the beginning or end of the
-    domain. If there is no leading and/or trailing zero, the interpolation starts as a
-    step function at the first (or last) supplied value. For example::
+    coordinates, with a step at the provided leading and trailing x coordinates.
 
-        >>> t = Tabulation([4, 6], [10, 10])
-        >>> t([ 1,   2,   3,   4,   5,   6,   7,   8,   9])
-        array([ 0.,  0.,  0., 10., 10., 10.,  0.,  0.,  0.])
-        >>> t.mean()
+    However, if explicitly supplied, one leading and/or trailing zero value is considered
+    significant because it anchors the interpolation at the beginning or end of the
+    domain. You should not provide more than one leading and/or trailing zero. For
+    example::
+
+        >>> t1 = Tabulation([2, 4], [10, 10])  # Leading&trailing step function
+        >>> t1.domain()
+        (2., 4.)
+        >>> t1([0,   1,   1.9, 2,   3,   3.9, 4,   5,   6])
+        array([ 0.,  0.,  0., 10., 10., 10., 10.,  0.,  0.])
+        >>> t1.mean()
         10.0
 
-        >>> t = Tabulation([2, 4, 6], [0, 10, 10])
-        >>> t([ 1,   2,   3,   4,   5,   6,   7,   8,   9])
-        array([ 0.,  0.,  5., 10., 10., 10.,  0.,  0.,  0.])
-        >>> t.mean()
+        >>> t2 = Tabulation([0, 2, 4], [0, 10, 10])  # Ramp on leading edge
+        >>> t2.domain()
+        (0., 4.)
+        >>> t2([0,   1,   1.9,  2,   3,   3.9, 4,   5,   6])
+        array([ 0.,  5.,  9.5, 10., 10., 10., 10.,  0.,  0.])
+        >>> t2.mean()
         7.5
 
     By default it is assumed that the function never has leading or trailing zeros beyond
@@ -51,6 +57,9 @@ class Tabulation(object):
     to have the domain include some amount of zero values, as trimming affects
     computations such as `mean` and `pivot_mean`. In these cases, the best workaround is
     to supply extremely small but non-zero values for those regions.
+
+    Note that you can not generally mix step- and ramp-style Tabulations in mathematical
+    operations such as addition or multiplication.
     """
 
     def __init__(self, x, y):
@@ -199,6 +208,22 @@ class Tabulation(object):
         mask = (new_x >= max(x1[0], x2[0])) & (new_x <= min(x1[-1], x2[-1]))
         return new_x[mask]
 
+    def _check_step_ramp_compatibility(self, other):
+        """Raise an exception if this and other have different step- and ramp-styles.
+
+        Parameters:
+            other (Tabulation): The second Tabulation object to compare against.
+
+        Raises:
+            ValueError: If the leading and/or trailing style of this Tabulation and other
+            do not match.
+        """
+
+        if (self.y[0] == 0) != (other.y[0] == 0):
+            raise ValueError("Incompatible leading step/ramp styles")
+        if (self.y[-1] == 0) != (other.y[-1] == 0):
+            raise ValueError("Incompatible trailing step/ramp styles")
+
     ########################################
     # Standard operators
     ########################################
@@ -241,6 +266,7 @@ class Tabulation(object):
         """
 
         if type(other) is type(self):
+            self._check_step_ramp_compatibility(other)
             new_x = Tabulation._xoverlap(self.x, other.x)
             return Tabulation(new_x, self(new_x) * other(new_x))
 
@@ -267,6 +293,7 @@ class Tabulation(object):
         """
 
         if type(other) is type(self):
+            self._check_step_ramp_compatibility(other)
             new_x = Tabulation._xoverlap(self.x, other.x)
             return Tabulation(new_x, self(new_x) / other(new_x))
 
@@ -295,6 +322,7 @@ class Tabulation(object):
         """
 
         if type(other) is type(self):
+            self._check_step_ramp_compatibility(other)
             new_x = Tabulation._xmerge(self.x, other.x)
             return Tabulation(new_x, self(new_x) + other(new_x))
 
@@ -324,6 +352,7 @@ class Tabulation(object):
         """
 
         if type(other) is type(self):
+            self._check_step_ramp_compatibility(other)
             new_x = Tabulation._xmerge(self.x, other.x)
             return Tabulation(new_x, self(new_x) - other(new_x))
 
@@ -349,6 +378,7 @@ class Tabulation(object):
         """
 
         if type(other) is type(self):
+            self._check_step_ramp_compatibility(other)
             new_x = Tabulation._xoverlap(self.x, other.x)
             return self._update(new_x, self(new_x) * other(new_x))._trim()
 
@@ -374,6 +404,7 @@ class Tabulation(object):
         """
 
         if type(other) is type(self):
+            self._check_step_ramp_compatibility(other)
             new_x = Tabulation._xoverlap(self.x, other.x)
             return self._update(new_x, self(new_x) / other(new_x))._trim()
 
@@ -401,6 +432,7 @@ class Tabulation(object):
         """
 
         if type(other) is type(self):
+            self._check_step_ramp_compatibility(other)
             new_x = Tabulation._xmerge(self.x, other.x)
             return self._update(new_x, self(new_x) + other(new_x))
 
@@ -429,6 +461,7 @@ class Tabulation(object):
         """
 
         if type(other) is type(self):
+            self._check_step_ramp_compatibility(other)
             new_x = Tabulation._xmerge(self.x, other.x)
             return self._update(new_x, self(new_x) - other(new_x))
 
@@ -488,10 +521,23 @@ class Tabulation(object):
         Returns:
             Tabulation: The new Tabulation, identical to the current Tabulation except
             that the x domain is now (xmin, xmax). If either x coordinate is beyond
-            the range of the current domain, zeros are assumed for the y values.
+            the range of the current domain, zeros are assumed for the y values if
+            the current Tabulation is ramp-style. Otherwise, an exception is raised.
+
+        Raises:
+            ValueError: If either x coordinate is beyond the range of the current
+            domain, and current Tabulation is not ramp-style.
+
+        Notes:
+            If the clip results in a leading or trailing zero value when there was
+            not one previously, the Tabulation will now be treated as ramp-style.
         """
 
         new_x = Tabulation._xmerge(self.x, np.array((xmin, xmax)))
+        if new_x[0] < self.x[0] and self.y[0] != 0:
+            raise ValueError("Clipping operation changed leading edge to ramp-style")
+        if new_x[-1] > self.x[-1] and self.y[-1] != 0:
+            raise ValueError("Clipping operation changed trailing edge to ramp-style")
         mask = (new_x >= xmin) & (new_x <= xmax)
         return self.resample(new_x[mask])
 

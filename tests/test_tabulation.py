@@ -20,8 +20,8 @@ class Test_Tabulation(unittest.TestCase):
         self.assertEqual(tab.domain(), (0., 7.))
         self.assertEqual(tab1.domain(), (2., 6.))
 
-        x = np.arange(11)
-        y = np.arange(11)
+        x = np.arange(1, 11)
+        y = np.arange(1, 11)
 
         tab = Tabulation(x, y)
 
@@ -29,37 +29,37 @@ class Test_Tabulation(unittest.TestCase):
         self.assertEqual(4.5, tab(4.5))
         self.assertEqual(0., tab(10.000000001))
 
-        self.assertEqual(tab.domain(), (0., 10.))
+        self.assertEqual(tab.domain(), (1., 10.))
         tab1 = tab.trim()
-        self.assertEqual(tab.domain(), (0., 10.))
-        self.assertEqual(tab1.domain(), (0., 10.))
+        self.assertEqual(tab.domain(), (1., 10.))
+        self.assertEqual(tab1.domain(), (1., 10.))
 
         reversed = Tabulation(x[::-1], y)
-        self.assertEqual(4., reversed(6))
-        self.assertEqual(4.5, reversed(5.5))
+        self.assertEqual(5., reversed(6))
+        self.assertEqual(5.5, reversed(5.5))
         self.assertEqual(0., reversed(10.000000001))
 
         self.assertTrue(np.all(np.array((3.5, 4.5, 5.5)) == tab((3.5, 4.5, 5.5))))
         self.assertTrue(tab.integral(), 50.)
 
-        resampled = tab.resample(np.arange(0, 10.5, 0.5))
+        resampled = tab.resample(np.arange(1, 10.5, 0.5))
         self.assertTrue(np.all(resampled.y == resampled.x))
 
-        resampled = tab.resample(np.array((0., 10.)))
+        resampled = tab.resample(np.array((1., 10.)))
         self.assertTrue(np.all(resampled.y == resampled.x))
 
         subsampled = tab.subsample(np.array([5.2, 5.5, 6., 7.]))
         self.assertTrue(np.all(subsampled.x ==
-                               np.array([0., 1., 2., 3., 4., 5., 5.2, 5.5,
+                               np.array([1., 2., 3., 4., 5., 5.2, 5.5,
                                          6., 7., 8., 9., 10.])))
         self.assertTrue(np.all(resampled.y == resampled.x))
 
-        xlist = np.arange(0., 10.25, 0.25)
+        xlist = np.arange(1., 10.25, 0.25)
         self.assertTrue(np.all(xlist == resampled(xlist)))
         self.assertTrue(np.all(xlist == tab(xlist)))
 
         sum = tab + reversed
-        self.assertTrue(np.all(sum.y == 10.))
+        self.assertTrue(np.all(sum.y == 11.))
 
         sum = tab + 10.
         self.assertTrue(np.all(sum(xlist) - tab(xlist) == 10.))
@@ -78,13 +78,22 @@ class Test_Tabulation(unittest.TestCase):
             self.assertEqual(tab.locate(x)[0], x)
             self.assertEqual(len(tab.locate(x)), 1)
 
-        clipped = resampled.clip(-5, 5)
-        self.assertEqual(clipped.domain(), (-5., 5.))
-        self.assertEqual(clipped.integral(), 12.5)
+        clipped = resampled.clip(2, 5)
+        self.assertEqual(clipped.domain(), (2., 5.))
+        self.assertEqual(clipped.integral(), 10.5)
 
         clipped = resampled.clip(4.5, 5.5)
         self.assertEqual(clipped.domain(), (4.5, 5.5))
         self.assertEqual(clipped.integral(), 5.)
+
+        with self.assertRaises(ValueError) as context:
+            resampled.clip(-5, 10)
+        self.assertEqual(str(context.exception),
+                         "Clipping operation changed leading edge to ramp-style")
+        with self.assertRaises(ValueError) as context:
+            resampled.clip(2, 12)
+        self.assertEqual(str(context.exception),
+                         "Clipping operation changed trailing edge to ramp-style")
 
         ratio = tab / clipped
         self.assertEqual(ratio.domain(), (4.5, 5.5))
@@ -101,6 +110,64 @@ class Test_Tabulation(unittest.TestCase):
         self.assertEqual(product(5.1), 5.1)
         self.assertEqual(product(5.5), 5.5)
         self.assertEqual(product(5.500001), 0.)
+
+        # Test ramp/step checking
+        ramp1 = Tabulation(np.arange(5), np.arange(5))  # First y == 0
+        ramp2 = Tabulation(np.arange(5), np.arange(-4, 1))  # Last y == 0
+        _ = resampled * resampled
+
+        with self.assertRaises(ValueError) as context:
+            _ = resampled * ramp1
+        self.assertEqual(str(context.exception),
+                         "Incompatible leading step/ramp styles")
+        with self.assertRaises(ValueError) as context:
+            _ = ramp1 * resampled
+        self.assertEqual(str(context.exception),
+                         "Incompatible leading step/ramp styles")
+
+        with self.assertRaises(ValueError) as context:
+            _ = resampled * ramp2
+        self.assertEqual(str(context.exception),
+                         "Incompatible trailing step/ramp styles")
+        with self.assertRaises(ValueError) as context:
+            _ = ramp2 * resampled
+        self.assertEqual(str(context.exception),
+                         "Incompatible trailing step/ramp styles")
+
+        with self.assertRaises(ValueError) as context:
+            _ = resampled / ramp1
+        self.assertEqual(str(context.exception),
+                         "Incompatible leading step/ramp styles")
+
+        with self.assertRaises(ValueError) as context:
+            _ = resampled + ramp1
+        self.assertEqual(str(context.exception),
+                         "Incompatible leading step/ramp styles")
+
+        with self.assertRaises(ValueError) as context:
+            _ = resampled - ramp1
+        self.assertEqual(str(context.exception),
+                         "Incompatible leading step/ramp styles")
+
+        with self.assertRaises(ValueError) as context:
+            ramp2 *= resampled
+        self.assertEqual(str(context.exception),
+                         "Incompatible trailing step/ramp styles")
+
+        with self.assertRaises(ValueError) as context:
+            ramp2 /= resampled
+        self.assertEqual(str(context.exception),
+                         "Incompatible trailing step/ramp styles")
+
+        with self.assertRaises(ValueError) as context:
+            ramp2 += resampled
+        self.assertEqual(str(context.exception),
+                         "Incompatible trailing step/ramp styles")
+
+        with self.assertRaises(ValueError) as context:
+            ramp2 -= resampled
+        self.assertEqual(str(context.exception),
+                         "Incompatible trailing step/ramp styles")
 
         # mean()
         boxcar = Tabulation((0., 10.), (1., 1.))
