@@ -12,71 +12,364 @@ class Test_Tabulation(unittest.TestCase):
 
     def runTest(self):
 
-        x = [0, 1, 2, 3, 4, 5, 6, 7]
-        y = [0, 0, 0, 1, 2, 3, 0, 0]
-        tab = Tabulation(x, y)
-        self.assertEqual(tab.domain(), (0., 7.))
-        tab1 = tab.trim()
-        self.assertEqual(tab.domain(), (0., 7.))
-        self.assertEqual(tab1.domain(), (2., 6.))
+        # Ramp-style edges
+        # xr = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+        # yr = [0, 0, 0, 1, 2, 6, 1, 0, 0]
+        xr = [-1., 0., 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12.]
+        yr = [0., 0., 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 0., 0.]
 
-        x = np.arange(1, 11)
-        y = np.arange(1, 11)
+        # Step-style edges
+        xs = [1., 2., 3., 4., 5., 6., 7., 8., 9., 10.]
+        ys = [1., 2., 3., 4., 5., 6., 7., 8., 9., 10.]
 
-        tab = Tabulation(x, y)
+        tabr = Tabulation(xr, yr)
+        self.assertEqual(tabr.domain(), (0., 11.))  # Trimmed
 
-        self.assertEqual(4., tab(4))
-        self.assertEqual(4.5, tab(4.5))
-        self.assertEqual(0., tab(10.000000001))
+        tabs = Tabulation(xs, ys)
+        self.assertEqual(tabs.domain(), (1., 10.))  # Not trimmed
 
-        self.assertEqual(tab.domain(), (1., 10.))
-        tab1 = tab.trim()
-        self.assertEqual(tab.domain(), (1., 10.))
-        self.assertEqual(tab1.domain(), (1., 10.))
+        self.assertEqual(4., tabs(4))
+        self.assertEqual(4.5, tabs(4.5))
+        self.assertEqual(0., tabs(10.000000001))
 
-        reversed = Tabulation(x[::-1], y)
-        self.assertEqual(5., reversed(6))
-        self.assertEqual(5.5, reversed(5.5))
-        self.assertEqual(0., reversed(10.000000001))
+        reverseds = Tabulation(xs[::-1], ys)  # Reverse X only, should sort ascending
+        self.assertEqual(5., reverseds(6))
+        self.assertEqual(5.5, reverseds(5.5))
+        self.assertEqual(0., reverseds(10.000000001))
+        self.assertEqual(reverseds.domain(), (1., 10.))
+        reversedr = Tabulation(xr[::-1], yr)  # Reverse X only, should sort ascending
+        self.assertEqual(5., reversedr(6))
+        self.assertEqual(5.5, reversedr(5.5))
+        self.assertEqual(0., reversedr(11.000000001))
+        self.assertEqual(reversedr.domain(), (0., 11.))
 
-        self.assertTrue(np.all(np.array((3.5, 4.5, 5.5)) == tab((3.5, 4.5, 5.5))))
-        self.assertTrue(tab.integral(), 50.)
+        self.assertTrue(np.all(np.array([3.5, 4.5, 5.5]) == tabs([3.5, 4.5, 5.5])))
+        self.assertTrue(tabs.integral(), 50.)
 
-        resampled = tab.resample(np.arange(1, 10.5, 0.5))
+        # RESAMPLE #
+
+        with self.assertRaises(ValueError) as context:
+            tabs.resample([-4, -5, -3])
+        self.assertEqual(
+            str(context.exception), "x-coordinates are not monotonic")
+
+        # All off left side
+        resampled = tabs.resample([-5, -4])
+        self.assertEqual(resampled.domain(), (0., 0.))
+        resampled = tabr.resample([-5, -4])
+        self.assertEqual(resampled.domain(), (0., 0.))
+
+        # All off right side
+        resampled = tabs.resample([50])
+        self.assertEqual(resampled.domain(), (0., 0.))
+        resampled = tabr.resample([50])
+        self.assertEqual(resampled.domain(), (0., 0.))
+
+        # Within existing domain
+        resampled = tabs.resample(np.arange(1, 10.1, 0.5))
         self.assertTrue(np.all(resampled.y == resampled.x))
-
-        resampled = tab.resample(np.array((1., 10.)))
+        self.assertEqual(resampled.x.shape, (19,))
+        self.assertEqual(resampled.domain(), (1, 10))
+        resampled = tabr.resample(np.arange(1, 10.1, 0.5))
         self.assertTrue(np.all(resampled.y == resampled.x))
+        self.assertEqual(resampled.x.shape, (19,))
+        self.assertEqual(resampled.domain(), (1, 10))
 
-        subsampled = tab.subsample(np.array([5.2, 5.5, 6., 7.]))
+        # Within existing domain
+        resampled = tabs.resample(np.array([1., 10.]))
+        self.assertTrue(np.all(resampled.y == resampled.x))
+        self.assertEqual(resampled.x.shape, (2,))
+        self.assertEqual(resampled.domain(), (1, 10))
+        resampled = tabr.resample(np.array([1., 10.]))  # Non-zero wings
+        self.assertTrue(np.all(resampled.y == resampled.x))
+        self.assertEqual(resampled.x.shape, (2,))
+        self.assertEqual(resampled.domain(), (1, 10))
+        resampled = tabr.resample(np.array([0., 11.]))  # Zero wings
+        self.assertTrue(np.all(resampled.y == np.array([0., 0.])))
+        self.assertEqual(resampled.x.shape, (2,))
+        self.assertEqual(resampled.domain(), (0, 11))
+
+        # Off left side only, trim
+        resampled = tabs.resample(np.array([0., 0.5, 10.]))
+        self.assertTrue(np.all(resampled.x == np.array([0.5, 10.])))
+        self.assertTrue(np.all(resampled.y == np.array([0., 10.])))
+        self.assertEqual(resampled.x.shape, (2,))
+        self.assertEqual(resampled.domain(), (0.5, 10))
+        resampled = tabr.resample(np.array([-1., 0., 0.5, 10.]))
+        self.assertTrue(np.all(resampled.x == np.array([0., 0.5, 10.])))
+        self.assertTrue(np.all(resampled.y == np.array([0., 0.5, 10.])))
+        self.assertEqual(resampled.x.shape, (3,))
+        self.assertEqual(resampled.domain(), (0., 10))
+
+        # Off right side only, trim
+        resampled = tabs.resample(np.array([10., 15., 16.]))
+        self.assertTrue(np.all(resampled.x == np.array([10., 15.])))
+        self.assertTrue(np.all(resampled.y == np.array([10., 0.])))
+        self.assertEqual(resampled.x.shape, (2,))
+        self.assertEqual(resampled.domain(), (10, 15))
+        resampled = tabr.resample(np.array([10., 15., 16.]))
+        self.assertTrue(np.all(resampled.x == np.array([10., 15.])))
+        self.assertTrue(np.all(resampled.y == np.array([10., 0.])))
+        self.assertEqual(resampled.x.shape, (2,))
+        self.assertEqual(resampled.domain(), (10, 15))
+
+        # SUBSAMPLE
+
+        subsampled = tabs.subsample(np.array([5.2, 5.5, 6., 7.]))
         self.assertTrue(np.all(subsampled.x ==
                                np.array([1., 2., 3., 4., 5., 5.2, 5.5,
                                          6., 7., 8., 9., 10.])))
-        self.assertTrue(np.all(resampled.y == resampled.x))
+        self.assertTrue(np.all(subsampled.y == subsampled.x))
+        subsampled = tabr.subsample(np.array([5.2, 5.5, 6., 7.]))
+        self.assertTrue(np.all(subsampled.x ==
+                               np.array([0., 1., 2., 3., 4., 5., 5.2, 5.5,
+                                         6., 7., 8., 9., 10., 11.])))
+        self.assertTrue(np.all(subsampled.y == np.array([0., 1., 2., 3., 4., 5., 5.2, 5.5,
+                                                         6., 7., 8., 9., 10., 0.])))
 
-        xlist = np.arange(1., 10.25, 0.25)
-        self.assertTrue(np.all(xlist == resampled(xlist)))
-        self.assertTrue(np.all(xlist == tab(xlist)))
+        subsampled = tabs.subsample(np.array([0., 11.]))
+        self.assertTrue(np.all(subsampled.x ==
+                               np.array([0., 1., 2., 3., 4., 5., 6., 7., 8.,
+                                         9., 10., 11.])))
+        self.assertTrue(np.all(subsampled.y == np.array([0., 1., 2., 3., 4., 5., 6., 7.,
+                                                         8., 9., 10., 0.])))
+        subsampled = tabr.subsample(np.array([0., 11.]))
+        self.assertTrue(np.all(subsampled.x ==
+                               np.array([0., 1., 2., 3., 4., 5., 6., 7., 8.,
+                                         9., 10., 11.])))
+        self.assertTrue(np.all(subsampled.y == np.array([0., 1., 2., 3., 4., 5., 6., 7.,
+                                                         8., 9., 10., 0.])))
 
-        sum = tab + reversed
-        self.assertTrue(np.all(sum.y == 11.))
+        # ADDITION
 
-        sum = tab + 10.
-        self.assertTrue(np.all(sum(xlist) - tab(xlist) == 10.))
+        x1 = [2, 3, 4, 5, 6, 7, 8, 9]  # Large step
+        y1 = [1, 2, 3, 4, 5, 4, 3, 2]
+        tab1 = Tabulation(x1, y1)
+        x2 = [4.5, 5, 6, 7]  # Centered step
+        y2 = [1, 2, 3, 1]
+        tab2 = Tabulation(x2, y2)
+        x3 = [1, 2, 3, 4, 4.3, 6.3, 7.3]  # Large ramp offset to left
+        y3 = [0, 1, 2, 3, 4, 5, 0]
+        tab3 = Tabulation(x3, y3)
+        x4 = [5.3, 6.1, 7.1, 8.1, 8.4]  # Small ramp offset to right
+        y4 = [0, 1, 2, 3, 0]
+        tab4 = Tabulation(x4, y4)
 
-        diff = sum - 10.
-        self.assertTrue(np.all(diff(xlist) - tab(xlist) == 0.))
+        off_xlist = np.arange(-1.02, 12.05, .05)
 
-        scaled = tab * 2.
-        self.assertTrue(np.all(scaled(xlist)/2. == tab(xlist)))
+        # This tests the addition of ramps explicitly
+        res = tab1 + tab2
+        self.assertTrue(np.all(res.x == np.array([2., 3., 4., 4.499999999999999,
+                                                  4.5, 5., 6., 7., 7.000000000000001,
+                                                  8.,  9])))
+        self.assertTrue(np.all(res.y == np.array([1, 2, 3, 3.499999999999999, 4.5,
+                                                  6, 8, 5, 3.999999999999999, 3, 2])))
+        self.assertTrue(np.all(np.abs((tab1(off_xlist)+tab2(off_xlist)-res(off_xlist)))<1e-10))
 
-        rescaled = scaled / 2.
-        self.assertTrue(np.all(rescaled(xlist) == tab(xlist)))
-        self.assertTrue(np.all(rescaled(xlist) == resampled(xlist)))
+        res = tab2 + tab1
+        self.assertTrue(np.all(np.abs((tab2(off_xlist)+tab1(off_xlist)-res(off_xlist)))<1e-10))
+
+        res = tab3 + tab4
+        self.assertTrue(np.all(res.x == np.array([1., 2., 3., 4., 4.3, 5.3, 6.1,
+                                                  6.3, 7.1, 7.3, 8.1, 8.4])))
+        self.assertTrue(np.all(res.y-np.array([0., 1., 2., 3., 4., 4.5, 5.9,
+                                               6.2, 3., 2.2, 3., 0.]))<1e-10)
+        self.assertTrue(np.all(np.abs((tab3(off_xlist)+tab4(off_xlist)-res(off_xlist)))<1e-10))
+
+        res = tab4 + tab3
+        self.assertTrue(np.all(np.abs((tab4(off_xlist)+tab3(off_xlist)-res(off_xlist)))<1e-10))
+
+        res = tab1 + tab3
+        self.assertTrue(np.all(np.abs((tab1(off_xlist)+tab3(off_xlist)-res(off_xlist)))<1e-10))
+
+        res = tab3 + tab1
+        self.assertTrue(np.all(np.abs((tab3(off_xlist)+tab1(off_xlist)-res(off_xlist)))<1e-10))
+
+        res = tab2 + tab4
+        self.assertTrue(np.all(np.abs((tab2(off_xlist)+tab4(off_xlist)-res(off_xlist)))<1e-10))
+
+        res = tab4 + tab2
+        self.assertTrue(np.all(np.abs((tab4(off_xlist)+tab2(off_xlist)-res(off_xlist)))<1e-10))
+
+        tab5 = Tabulation(x1, y1)
+        tab5 += tab2
+        self.assertTrue(np.all(np.abs((tab1(off_xlist)+tab2(off_xlist)-tab5(off_xlist)))<1e-10))
+
+        with self.assertRaises(ValueError) as context:
+            _ = tab1 + np.array([])
+        self.assertEqual(
+            str(context.exception),
+            "Cannot add Tabulation by given value"
+            )
+
+        with self.assertRaises(ValueError) as context:
+            _ = tab1 + 5
+        self.assertEqual(
+            str(context.exception),
+            "Cannot add Tabulation by given value"
+            )
+
+        with self.assertRaises(ValueError) as context:
+            tab1 += np.array([])
+        self.assertEqual(
+            str(context.exception),
+            "Cannot add Tabulation in-place by given value"
+            )
+
+        with self.assertRaises(ValueError) as context:
+            tab1 += 5
+        self.assertEqual(
+            str(context.exception),
+            "Cannot add Tabulation in-place by given value"
+            )
+
+        # SUBTRACTION
+
+        res = tab1 - tab2
+        self.assertTrue(np.all(np.abs((tab1(off_xlist)-tab2(off_xlist)-res(off_xlist)))<1e-10))
+
+        res = tab2 - tab1
+        self.assertTrue(np.all(np.abs((tab2(off_xlist)-tab1(off_xlist)-res(off_xlist)))<1e-10))
+
+        res = tab3 - tab4
+        self.assertTrue(np.all(np.abs((tab3(off_xlist)-tab4(off_xlist)-res(off_xlist)))<1e-10))
+
+        res = tab4 - tab3
+        self.assertTrue(np.all(np.abs((tab4(off_xlist)-tab3(off_xlist)-res(off_xlist)))<1e-10))
+
+        res = tab1 - tab3
+        self.assertTrue(np.all(np.abs((tab1(off_xlist)-tab3(off_xlist)-res(off_xlist)))<1e-10))
+
+        res = tab3 - tab1
+        self.assertTrue(np.all(np.abs((tab3(off_xlist)-tab1(off_xlist)-res(off_xlist)))<1e-10))
+
+        res = tab2 - tab4
+        self.assertTrue(np.all(np.abs((tab2(off_xlist)-tab4(off_xlist)-res(off_xlist)))<1e-10))
+
+        res = tab4 - tab2
+        self.assertTrue(np.all(np.abs((tab4(off_xlist)-tab2(off_xlist)-res(off_xlist)))<1e-10))
+
+        tab5 = Tabulation(x1, y1)
+        tab5 -= tab2
+        self.assertTrue(np.all(np.abs((tab1(off_xlist)-tab2(off_xlist)-tab5(off_xlist)))<1e-10))
+
+        with self.assertRaises(ValueError) as context:
+            _ = tab1 - np.array([])
+        self.assertEqual(
+            str(context.exception),
+            "Cannot subtract Tabulation by given value"
+            )
+
+        with self.assertRaises(ValueError) as context:
+            _ = tab1 - 5
+        self.assertEqual(
+            str(context.exception),
+            "Cannot subtract Tabulation by given value"
+            )
+
+        with self.assertRaises(ValueError) as context:
+            tab1 -= np.array([])
+        self.assertEqual(
+            str(context.exception),
+            "Cannot subtract Tabulation in-place by given value"
+            )
+
+        with self.assertRaises(ValueError) as context:
+            tab1 -= 5
+        self.assertEqual(
+            str(context.exception),
+            "Cannot subtract Tabulation in-place by given value"
+            )
+
+        # MULTIPLICATION
+
+        res = tab1 * tab2
+        self.assertTrue(np.all(np.abs((tab1(tab1.x)*tab2(tab1.x)-res(tab1.x)))<1e-10))
+        self.assertTrue(np.all(np.abs((tab1(tab2.x)*tab2(tab2.x)-res(tab2.x)))<1e-10))
+
+        res = tab2 * tab1
+        self.assertTrue(np.all(np.abs((tab1(tab1.x)*tab2(tab1.x)-res(tab1.x)))<1e-10))
+        self.assertTrue(np.all(np.abs((tab1(tab2.x)*tab2(tab2.x)-res(tab2.x)))<1e-10))
+
+        res = tab3 * tab4
+        self.assertTrue(np.all(np.abs((tab3(tab3.x)*tab4(tab3.x)-res(tab3.x)))<1e-10))
+        self.assertTrue(np.all(np.abs((tab3(tab4.x)*tab4(tab4.x)-res(tab4.x)))<1e-10))
+
+        res = tab4 * tab3
+        self.assertTrue(np.all(np.abs((tab3(tab3.x)*tab4(tab3.x)-res(tab3.x)))<1e-10))
+        self.assertTrue(np.all(np.abs((tab3(tab4.x)*tab4(tab4.x)-res(tab4.x)))<1e-10))
+
+        res = tab1 * tab3
+        self.assertTrue(np.all(np.abs((tab1(tab1.x)*tab3(tab1.x)-res(tab1.x)))<1e-10))
+        self.assertTrue(np.all(np.abs((tab1(tab3.x)*tab3(tab3.x)-res(tab3.x)))<1e-10))
+
+        res = tab3 * tab1
+        self.assertTrue(np.all(np.abs((tab1(tab1.x)*tab3(tab1.x)-res(tab1.x)))<1e-10))
+        self.assertTrue(np.all(np.abs((tab1(tab3.x)*tab3(tab3.x)-res(tab3.x)))<1e-10))
+
+        res = tab2 * tab4
+        self.assertTrue(np.all(np.abs((tab2(tab2.x)*tab4(tab2.x)-res(tab2.x)))<1e-10))
+        self.assertTrue(np.all(np.abs((tab2(tab4.x)*tab4(tab4.x)-res(tab4.x)))<1e-10))
+
+        res = tab4 * tab2
+        self.assertTrue(np.all(np.abs((tab2(tab2.x)*tab4(tab2.x)-res(tab2.x)))<1e-10))
+        self.assertTrue(np.all(np.abs((tab2(tab4.x)*tab4(tab4.x)-res(tab4.x)))<1e-10))
+
+        res = tab1 * 10
+        self.assertTrue(np.all(np.abs((tab1(off_xlist)*10-res(off_xlist)))<1e-10))
+
+        tab5 = Tabulation(x1, y1)
+        tab5 *= tab2
+        self.assertTrue(np.all(np.abs((tab1(tab1.x)*tab2(tab1.x)-tab5(tab1.x)))<1e-10))
+
+        tab5 = Tabulation(x1, y1)
+        tab5 *= 10
+        self.assertTrue(np.all(np.abs((tab1(off_xlist)*10-tab5(off_xlist)))<1e-10))
+
+        with self.assertRaises(ValueError) as context:
+            _ = tab1 * np.array([])
+        self.assertEqual(
+            str(context.exception),
+            "Cannot multiply Tabulation by given value"
+            )
+
+        with self.assertRaises(ValueError) as context:
+            tab1 *= np.array([])
+        self.assertEqual(
+            str(context.exception),
+            "Cannot multiply Tabulation in-place by given value"
+            )
+
+        # DIVISION
+
+        res = tab1 / 10
+        self.assertTrue(np.all(np.abs((tab1(off_xlist)/10-res(off_xlist)))<1e-10))
+
+        tab5 = Tabulation(x1, y1)
+        tab5 /= 10
+        self.assertTrue(np.all(np.abs((tab1(off_xlist)/10-tab5(off_xlist)))<1e-10))
+
+        with self.assertRaises(ValueError) as context:
+            _ = tab1 / np.array([])
+        self.assertEqual(
+            str(context.exception),
+            "Cannot divide Tabulation by given value"
+            )
+
+        with self.assertRaises(ValueError) as context:
+            tab1 /= np.array([])
+        self.assertEqual(
+            str(context.exception),
+            "Cannot divide Tabulation in-place by given value"
+            )
+
+        # LOCATE
 
         for x in xlist:
             self.assertEqual(tab.locate(x)[0], x)
             self.assertEqual(len(tab.locate(x)), 1)
+
+        # CLIP
 
         clipped = resampled.clip(2, 5)
         self.assertEqual(clipped.domain(), (2., 5.))
@@ -116,81 +409,31 @@ class Test_Tabulation(unittest.TestCase):
         ramp2 = Tabulation(np.arange(5), np.arange(-4, 1))  # Last y == 0
         _ = resampled * resampled
 
-        with self.assertRaises(ValueError) as context:
-            _ = resampled * ramp1
-        self.assertEqual(str(context.exception),
-                         "Incompatible leading step/ramp styles")
-        with self.assertRaises(ValueError) as context:
-            _ = ramp1 * resampled
-        self.assertEqual(str(context.exception),
-                         "Incompatible leading step/ramp styles")
+        # CENTER
 
-        with self.assertRaises(ValueError) as context:
-            _ = resampled * ramp2
-        self.assertEqual(str(context.exception),
-                         "Incompatible trailing step/ramp styles")
-        with self.assertRaises(ValueError) as context:
-            _ = ramp2 * resampled
-        self.assertEqual(str(context.exception),
-                         "Incompatible trailing step/ramp styles")
-
-        with self.assertRaises(ValueError) as context:
-            _ = resampled / ramp1
-        self.assertEqual(str(context.exception),
-                         "Incompatible leading step/ramp styles")
-
-        with self.assertRaises(ValueError) as context:
-            _ = resampled + ramp1
-        self.assertEqual(str(context.exception),
-                         "Incompatible leading step/ramp styles")
-
-        with self.assertRaises(ValueError) as context:
-            _ = resampled - ramp1
-        self.assertEqual(str(context.exception),
-                         "Incompatible leading step/ramp styles")
-
-        with self.assertRaises(ValueError) as context:
-            ramp2 *= resampled
-        self.assertEqual(str(context.exception),
-                         "Incompatible trailing step/ramp styles")
-
-        with self.assertRaises(ValueError) as context:
-            ramp2 /= resampled
-        self.assertEqual(str(context.exception),
-                         "Incompatible trailing step/ramp styles")
-
-        with self.assertRaises(ValueError) as context:
-            ramp2 += resampled
-        self.assertEqual(str(context.exception),
-                         "Incompatible trailing step/ramp styles")
-
-        with self.assertRaises(ValueError) as context:
-            ramp2 -= resampled
-        self.assertEqual(str(context.exception),
-                         "Incompatible trailing step/ramp styles")
-
-        # mean()
         boxcar = Tabulation((0., 10.), (1., 1.))
         self.assertEqual(boxcar.mean(), 1.)
 
-        # bandwidth_rms()
-        # value = 5. / np.sqrt(3.)
-        # eps = 1.e-7
-        # self.assertTrue(np.abs(boxcar.bandwidth_rms() - value) < eps)
+        # BANDWIDTH_RMS
 
-        # pivot_mean()
+        value = 5. / np.sqrt(3.)
+        eps = 1.e-7
+        self.assertTrue(np.abs(boxcar.bandwidth_rms() - value) < eps)
+
+        # PIVOT_MEAN
+
         # For narrow functions, the pivot_mean and the mean are similar
-        # eps = 1.e-3
-        # print(boxcar.pivot_mean(1.e-6))
-        # self.assertTrue(np.abs(boxcar.pivot_mean(1.e-6) - 1.) < eps)
+        eps = 1.e-3
+        self.assertTrue(np.abs(boxcar.pivot_mean(1.e-6) - 1.) < eps)
 
-        # # For broad functions, values differ
-        # boxcar = Tabulation((1, 100), (1, 1))
-        # value = 99. / np.log(100.)
-        # eps = 1.e-3
-        # self.assertTrue(np.abs(boxcar.pivot_mean(1.e-6) - value) < eps)
+        # For broad functions, values differ
+        boxcar = Tabulation((1, 100), (1, 1))
+        value = 99. / np.log(100.)
+        eps = 1.e-3
+        self.assertTrue(np.abs(boxcar.pivot_mean(1.e-6) - value) < eps)
 
-        # fwhm()
+        # FWHM
+
         triangle = Tabulation((0, 10, 20), (0, 1, 0))
         self.assertEqual(triangle.fwhm(), 10.)
 
@@ -209,9 +452,12 @@ class Test_Tabulation(unittest.TestCase):
         self.assertEqual(str(context.exception),
                          "Tabulation does not cross fractional height twice")
 
-        # square_width()
+        # SQUARE_WIDTH
+
         self.assertEqual(triangle.square_width(), 10.)
         self.assertEqual(boxcar.square_width(), 10.)
+
+        # INITIALIZATION ERRORS
 
         # Not 1 dimensional x
         x = np.array([[1, 2], [3, 4]])  # 2-dimensional array
@@ -286,325 +532,3 @@ class Test_Tabulation(unittest.TestCase):
         # value = 5
 
         # self.assertTrue(np.abs(boxcar.bandwidth_rms() - value) == 0.)
-
-        # Test multiplication of Two Tabulations
-        x1 = np.array([1, 2, 3])
-        y1 = np.array([4, 5, 6])
-        tab1 = Tabulation(x1, y1)
-
-        x2 = np.array([1, 2, 3])
-        y2 = np.array([1, 2, 3])
-        tab2 = Tabulation(x2, y2)
-
-        result = tab1 * tab2
-
-        expected_x = [1, 2, 3]  # Merged x values
-
-        self.assertTrue(np.array_equal(result.x, expected_x))
-        self.assertTrue(np.array_equal(result(x), tab1(x) * tab2(x)))
-        self.assertTrue(np.array_equal(result.y, tab1.y * tab2.y))
-        self.assertTrue(np.array_equal(result.y, y1 * y2))
-
-        # Test multiplication of Two Tabulations with a scalar
-        x = np.array([1, 2, 3])
-        y = np.array([4, 5, 6])
-        tab = Tabulation(x, y)
-
-        scalar = 2
-
-        result = tab * scalar
-
-        assert np.array_equal(result(x), tab(x) * scalar)
-        assert np.array_equal(result.y, tab.y * scalar)
-        assert np.array_equal(result.y, y * scalar)
-
-        # Test multiplication of Two Tabulations with a scalar (with floats)
-        x = np.array([1., 2., 3.])
-        y = np.array([4., 5., 6.])
-        tab = Tabulation(x, y)
-
-        scalar = 2.0
-
-        result = tab * scalar
-
-        assert np.array_equal(result(x), tab(x) * scalar)
-        assert np.array_equal(result.y, tab.y * scalar)
-        assert np.array_equal(result.y, y * scalar)
-
-        # Testing multiplication with bad array
-        x = np.array([1, 2, 3])
-        y = np.array([4, 5, 6])
-        tab = Tabulation(x, y)
-
-        bad_array = np.array([])
-        with self.assertRaises(ValueError) as context:
-            result = tab * bad_array
-        self.assertEqual(
-            str(context.exception),
-            "Cannot multiply Tabulation by given value"
-            )
-
-        # Test in-place multiplication of two Tabulations
-        x1 = np.array([1, 2, 3])
-        y1 = np.array([4, 5, 6])
-        tab1 = Tabulation(x1, y1)
-
-        x2 = np.array([1, 2, 3])
-        y2 = np.array([1, 2, 3])
-        tab2 = Tabulation(x2, y2)
-
-        tab1 *= tab2
-        expected_x = np.array([1, 2, 3])  # Intersection of x1 and x2
-        expected_y = [4., 10., 18.]
-
-        assert np.array_equal(expected_x, tab1.x)
-        assert np.array_equal(expected_y, tab1.y)
-        assert np.array_equal(expected_y, tab1(x1))
-
-        # Test in-place multiplication with a scalar
-        x = np.array([1, 2, 3])
-        y = np.array([4, 5, 6])
-        tab = Tabulation(x, y)
-        scalar_value = 2.0
-
-        tab *= scalar_value
-        expected_y = y * scalar_value
-        self.assertTrue(np.array_equal(expected_y, tab.y))
-        self.assertTrue(np.array_equal(expected_y, tab(x)))
-
-        # Testing in-place multiplication with bad array
-        x = np.array([1, 2, 3])
-        y = np.array([4, 5, 6])
-        tab = Tabulation(x, y)
-
-        bad_array = np.array([])
-        with self.assertRaises(ValueError) as context:
-            tab *= bad_array
-        self.assertEqual(
-            str(context.exception),
-            "Cannot multiply Tabulation in-place by given value"
-            )
-
-        # Test in-place division of two Tabulations
-        x1 = np.array([1, 2, 3])
-        y1 = np.array([4, 5, 6])
-        tab1 = Tabulation(x1, y1)
-
-        x2 = np.array([1, 2, 3])
-        y2 = np.array([1, 2, 3])
-        tab2 = Tabulation(x2, y2)
-
-        tab1 /= tab2
-
-        expected_x = np.array([1., 2., 3.])  # Intersection of x1 and x2
-        expected_y = np.array([4., 2.5, 2.])
-
-        self.assertTrue(np.array_equal(expected_x, tab1.x))
-        self.assertTrue(np.array_equal(expected_y, tab1.y))
-        self.assertTrue(np.array_equal(expected_y, tab1(x1)))
-
-        # Test in-place division of a Tabulations with a scalar
-        x = np.array([1, 2, 3])
-        y = np.array([4, 5, 6])
-        tab = Tabulation(x, y)
-        scalar_value = 2
-
-        tab /= scalar_value
-        expected_y = y / scalar_value
-        self.assertTrue(np.array_equal(expected_y, tab.y))
-        self.assertTrue(np.array_equal(expected_y, tab(x)))
-
-        # Test in-place division of a Tabulations with a scalar (with floats)
-        x = np.array([1., 2., 3.])
-        y = np.array([4., 5., 6.])
-        tab = Tabulation(x, y)
-        scalar_value = 2.0
-
-        tab /= scalar_value
-        expected_y = y / scalar_value
-        self.assertTrue(np.array_equal(expected_y, tab.y))
-        self.assertTrue(np.array_equal(expected_y, tab(x)))
-
-        # Testing division with a bad array
-        x = np.array([1, 2, 3])
-        y = np.array([4, 5, 6])
-        tab = Tabulation(x, y)
-
-        bad_array = np.array([])
-        with self.assertRaises(ValueError) as context:
-            result = tab / bad_array
-        self.assertEqual(
-            str(context.exception),
-            "Cannot divide Tabulation by given value"
-            )
-
-        # Testing in-place division with a bad array
-        x = np.array([1, 2, 3])
-        y = np.array([4, 5, 6])
-        tab = Tabulation(x, y)
-
-        bad_array = np.array([])
-        with self.assertRaises(ValueError) as context:
-            tab /= bad_array
-        self.assertEqual(
-            str(context.exception),
-            "Cannot divide Tabulation in-place by given value"
-            )
-
-        # Test addition of two Tabulations with a scalar
-        x = np.array([1, 2, 3])
-        y = np.array([4, 5, 6])
-        tab = Tabulation(x, y)
-
-        scalar = 2
-
-        tab += scalar
-
-        self.assertTrue(np.array_equal(tab.x, np.array([1, 2, 3])))
-        self.assertTrue(np.array_equal(tab.y, np.array([4, 5, 6]) + scalar))
-        self.assertTrue(np.array_equal(tab(x), np.array([4, 5, 6]) + scalar))
-        self.assertTrue(np.array_equal(y + scalar, np.array([4, 5, 6]) + scalar))
-
-        # Test addition of two Tabulations with a scalar (with floats)
-        x = np.array([1., 2., 3.])
-        y = np.array([4., 5., 6.])
-        tab = Tabulation(x, y)
-
-        scalar = 2.0
-
-        tab += scalar
-
-        self.assertTrue(np.array_equal(tab.x, np.array([1., 2., 3.])))
-        self.assertTrue(np.array_equal(tab.y, np.array([4., 5., 6.]) + scalar))
-        self.assertTrue(np.array_equal(tab(x), np.array([4., 5., 6.]) + scalar))
-        self.assertTrue(np.array_equal(y + scalar, np.array([4., 5., 6.]) + scalar))
-
-        # Test in-place addition of two Tabulations
-        x1 = np.array([1, 2, 3])
-        y1 = np.array([4, 5, 6])
-        tab1 = Tabulation(x1, y1)
-
-        x2 = np.array([1, 2, 3])
-        y2 = np.array([1, 2, 3])
-        tab2 = Tabulation(x2, y2)
-
-        tab1 += tab2
-        expected_x = np.array([1, 2, 3])  # Merge of x1 and x2
-        expected_y = np.array([6, 9, 12])
-
-        self.assertTrue(np.array_equal(expected_x, tab1.x))
-        self.assertTrue(np.array_equal(expected_y, tab1.y + tab2.y))
-        self.assertTrue(np.array_equal(expected_y, tab1(x1) + tab2(x2)))
-
-        # Testing in-place addition with a bad array
-        x = np.array([1, 2, 3])
-        y = np.array([4, 5, 6])
-        tab = Tabulation(x, y)
-
-        bad_array = np.array([])
-        with self.assertRaises(ValueError) as context:
-            tab += bad_array
-        self.assertEqual(
-            str(context.exception),
-            "Cannot add Tabulation in-place by given value"
-            )
-
-        # Testing addition with a bad array
-        x = np.array([1, 2, 3])
-        y = np.array([4, 5, 6])
-        tab = Tabulation(x, y)
-
-        bad_array = np.array([])
-        with self.assertRaises(ValueError) as context:
-            result = tab + bad_array
-        self.assertEqual(
-            str(context.exception),
-            "Cannot add Tabulation by given value"
-            )
-
-        # Test subtraction of two Tabulations
-        x1 = np.array([1, 2, 3])
-        y1 = np.array([4, 5, 6])
-        tab1 = Tabulation(x1, y1)
-
-        x2 = np.array([1, 2, 3])
-        y2 = np.array([1, 2, 3])
-        tab2 = Tabulation(x2, y2)
-
-        result = tab1 - tab2
-
-        expected_x = [1, 2, 3]  # Merged x values
-
-        self.assertTrue(np.array_equal(result.x, expected_x))
-        self.assertTrue(np.array_equal(result.y, tab1.y - tab2.y))
-        self.assertTrue(np.array_equal(result.y, y1 - y2))
-        self.assertTrue(np.array_equal(result(x1), tab1(x1) - tab2(x2)))
-
-        # Testing subtraction with a bad array
-        x = np.array([1, 2, 3])
-        y = np.array([4, 5, 6])
-        tab = Tabulation(x, y)
-
-        bad_array = np.array([])
-        with self.assertRaises(ValueError) as context:
-            result = tab - bad_array
-        self.assertEqual(
-            str(context.exception),
-            "Cannot subtract Tabulation by given value"
-            )
-
-        # Test in-place subtraction of two Tabulations
-        x1 = np.array([1, 2, 3])
-        y1 = np.array([4, 5, 6])
-        tab1 = Tabulation(x1, y1)
-
-        x2 = np.array([1, 2, 3])
-        y2 = np.array([1, 2, 3])
-        tab2 = Tabulation(x2, y2)
-
-        tab1 -= tab2
-        expected_x = np.array([1, 2, 3])  # Merge of x1 and x2
-        expected_y = np.array([2, 1, 0])
-
-        self.assertTrue(np.array_equal(expected_x, tab1.x))
-        self.assertTrue(np.array_equal(expected_y, tab1.y - tab2.y))
-        self.assertTrue(np.array_equal(expected_y, tab1(x1) - tab2(x2)))
-
-        # Test in-place subtraction of two Tabulations with a scalar
-        x = np.array([1, 2, 3])
-        y = np.array([4, 5, 6])
-        tab = Tabulation(x, y)
-
-        scalar = 2
-
-        tab -= scalar
-
-        self.assertTrue(np.array_equal(tab.x, np.array([1, 2, 3])))
-        self.assertTrue(np.array_equal(tab.y, np.array([4, 5, 6]) - scalar))
-        self.assertTrue(np.array_equal(tab(x), np.array([4, 5, 6]) - scalar))
-
-        # Test in-place subtraction of two Tabulations with a scalar (with floats)
-        x = np.array([1., 2., 3.])
-        y = np.array([4., 5., 6.])
-        tab = Tabulation(x, y)
-
-        scalar = 2.0
-
-        tab -= scalar
-
-        self.assertTrue(np.array_equal(tab.x, np.array([1., 2., 3.])))
-        self.assertTrue(np.array_equal(tab.y, np.array([4., 5., 6.]) - scalar))
-        self.assertTrue(np.array_equal(tab(x), np.array([4., 5., 6.]) - scalar))
-
-        # Testing subtraction in-place with a bad array
-        x = np.array([1, 2, 3])
-        y = np.array([4, 5, 6])
-        tab = Tabulation(x, y)
-
-        bad_array = np.array([])
-        with self.assertRaises(ValueError) as context:
-            tab -= bad_array
-        self.assertEqual(
-            str(context.exception),
-            "Cannot subtract Tabulation in-place by given value"
-            )

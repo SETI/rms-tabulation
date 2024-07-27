@@ -10,6 +10,7 @@ interpolations between points defined by arrays of x and y coordinates. See the
 documentation for the Tabulation class for full details.
 """
 
+import math
 import numpy as np
 from scipy.interpolate import interp1d
 
@@ -26,40 +27,30 @@ class Tabulation(object):
     coordinates. The function is treated as equal to zero outside the range of the x
     coordinates, with a step at the provided leading and trailing x coordinates.
 
-    However, if explicitly supplied, one leading and/or trailing zero value is considered
-    significant because it anchors the interpolation at the beginning or end of the
-    domain. You should not provide more than one leading and/or trailing zero. For
-    example::
+    In general, zero values (either supplied or computed) at either the leading or
+    trailing ends are removed. However, if explicitly supplied, one leading and/or
+    trailing zero value is considered significant because it anchors the interpolation of
+    a ramp at the beginning or end of the domain. For example::
 
-        >>> t1 = Tabulation([2, 4], [10, 10])  # Leading&trailing step function
+        >>> t1 = Tabulation([2, 4], [10, 10])  # Leading & trailing step function
         >>> t1.domain()
         (2., 4.)
         >>> t1([0,   1,   1.9, 2,   3,   3.9, 4,   5,   6])
         array([ 0.,  0.,  0., 10., 10., 10., 10.,  0.,  0.])
-        >>> t1.mean()
-        10.0
 
         >>> t2 = Tabulation([0, 2, 4], [0, 10, 10])  # Ramp on leading edge
         >>> t2.domain()
         (0., 4.)
         >>> t2([0,   1,   1.9,  2,   3,   3.9, 4,   5,   6])
         array([ 0.,  5.,  9.5, 10., 10., 10., 10.,  0.,  0.])
-        >>> t2.mean()
-        7.5
 
     By default it is assumed that the function never has leading or trailing zeros beyond
     the single zero necessary to anchor the interpolation, and the Tabulation object will
     automatically trim any additional leading and/or trailing regions of the domain that
-    have purely zero values after many operations. This is done to improve space and time
-    efficiency.
+    have purely zero values.
 
-    However, while reasonable for most applications, there are times where it is important
-    to have the domain include some amount of zero values, as trimming affects
-    computations such as `mean` and `pivot_mean`. In these cases, the best workaround is
-    to supply extremely small but non-zero values for those regions.
-
-    Note that you can not generally mix step- and ramp-style Tabulations in mathematical
-    operations such as addition or multiplication.
+    When mathematical operations are performed on Tabulations, new x-coordinates are
+    added as necessary to keep the behavior of step functions. For example::
     """
 
     def __init__(self, x, y):
@@ -80,7 +71,7 @@ class Tabulation(object):
     ########################################
 
     def _update(self, x, y):
-        """Update a Tabulation in place with new x and y arrays.
+        """Update a Tabulation in place with new x and y arrays. Trim the result.
 
         Parameters:
             x (array-like): The new 1-D array of x-coordinates.
@@ -92,7 +83,6 @@ class Tabulation(object):
 
         x = np.asarray(x, dtype=np.double)
         y = np.asarray(y, dtype=np.double)
-        sorted = np.sort(x)
 
         if len(x.shape) != 1:
             raise ValueError("x array is not 1-dimensional")
@@ -100,20 +90,28 @@ class Tabulation(object):
         if x.shape != y.shape:
             raise ValueError("x and y arrays do not have the same size")
 
-        if np.all(sorted == x):
+        if len(x) == 0:
+            x = np.array([0.])
+            y = np.array([0.])
+
+        mask = x[:-1] < x[1:]
+        if np.all(mask):
             self.x = x
             self.y = y
-        elif np.all(sorted == x[::-1]):
+        else:
+            mask = x[:-1] > x[1:]
+            if not np.all(mask):
+                raise ValueError("x-coordinates are not monotonic")
             self.x = x[::-1]
             self.y = y[::-1]
-        else:
-            raise ValueError("x-coordinates are not monotonic")
+
+        self._trim()
 
         self.func = None
         return self
 
     def _update_y(self, new_y):
-        """Update a Tabulation in place with a new y array.
+        """Update a Tabulation in place with a new y array. Trim the result.
 
         Parameters:
             new_y (array-like): The new 1-D array of y-coordinates.
@@ -128,28 +126,34 @@ class Tabulation(object):
             raise ValueError("x and y arrays do not have the same size")
 
         self.y = y
+
+        self._trim()
+
         self.func = None
         return self
 
     def _trim(self):
-        """Update a Tabulation in place by deleting leading/trailing zero-valued regions.
-
-        Returns:
-            Tabulation: The current Tabulation object mutated with the unused regions
-            removed.
+        """
+        Update a Tabulation in place by deleting leading/trailing zero-valued regions.
 
         Notes:
-            This will always create a copy of the x and y coordinates.
+            This will create a copy of the x and y coordinates if trimming is necessary,
+            and return the original arrays if trimming is not necessary.
         """
 
         def _trim1(x, y):
             """Strip away the leading end of an (x,y) array pair."""
+            if len(x) <= 2:  # 1 or 2 elements, nothing to trim
+                return (x, y)
+
             # Define a mask at the low end
             mask = np.cumsum(y != 0.) != 0
 
             # Shift left by one to keep last zero
             mask[:-1] = mask[1:]
 
+            if np.all(mask):
+                return (x, y)  # Don't make a copy if it's the same array
             return (x[mask], y[mask])
 
         # Trim the trailing end
@@ -158,7 +162,8 @@ class Tabulation(object):
         # Trim the leading end
         (new_x, new_y) = _trim1(new_x[::-1], new_y[::-1])
 
-        return self._update(new_x, new_y)
+        self.x = new_x
+        self.y = new_y
 
     @staticmethod
     def _xmerge(x1, x2):
@@ -208,21 +213,40 @@ class Tabulation(object):
         mask = (new_x >= max(x1[0], x2[0])) & (new_x <= min(x1[-1], x2[-1]))
         return new_x[mask]
 
-    def _check_step_ramp_compatibility(self, other):
-        """Raise an exception if this and other have different step- and ramp-styles.
+    @staticmethod
+    def _add_ramps_as_necessary(t1, t2):
+        x1 = t1.x
+        y1 = t1.y
+        x2 = t2.x
+        y2 = t2.y
 
-        Parameters:
-            other (Tabulation): The second Tabulation object to compare against.
+        if t1.y[0] != 0 and t2.x[0] < t1.x[0]:
+            # t1 leading is a step and t2 starts to the left, add a tiny ramp
+            eps_x = math.nextafter(t1.x[0], -math.inf)
+            x1 = np.concatenate(([eps_x], x1))
+            y1 = np.concatenate(([0.], y1))
+        if t1.y[-1] != 0 and t2.x[-1] > t1.x[-1]:
+            # t1 trailing is a step and t2 end to the right, add a tiny ramp
+            eps_x = math.nextafter(t1.x[-1], math.inf)
+            x1 = np.concatenate((x1, [eps_x]))
+            y1 = np.concatenate((y1, [0.]))
+        if t2.y[0] != 0 and t1.x[0] < t2.x[0]:
+            # t2 leading is a step and t1 starts to the left, add a tiny ramp
+            eps_x = math.nextafter(t2.x[0], -math.inf)
+            x2 = np.concatenate(([eps_x], x2))
+            y2 = np.concatenate(([0.], y2))
+        if t2.y[-1] != 0 and t1.x[-1] > t2.x[-1]:
+            # t2 trailing is a step and t1 end to the right, add a tiny ramp
+            eps_x = math.nextafter(t2.x[-1], math.inf)
+            x2 = np.concatenate((x2, [eps_x]))
+            y2 = np.concatenate((y2, [0.]))
 
-        Raises:
-            ValueError: If the leading and/or trailing style of this Tabulation and other
-            do not match.
-        """
+        if x1 is not t1.x or y1 is not t1.y:
+            t1 = Tabulation(x1, y1)
+        if x2 is not t2.x or y2 is not t2.y:
+            t2 = Tabulation(x2, y2)
 
-        if (self.y[0] == 0) != (other.y[0] == 0):
-            raise ValueError("Incompatible leading step/ramp styles")
-        if (self.y[-1] == 0) != (other.y[-1] == 0):
-            raise ValueError("Incompatible trailing step/ramp styles")
+        return t1, t2
 
     ########################################
     # Standard operators
@@ -262,11 +286,13 @@ class Tabulation(object):
 
         Notes:
             The new domain is the intersection of the domains of the current Tabulation
-            and the given Tabulation.
+            and the given Tabulation. Because the resulting Tabulation is only computed
+            at the existing linear interpolation points, and the resulting Tabulation
+            is also linearly interpolated, the values between interpolation points will
+            not be accurate (a quadratic interpolation would be required).
         """
 
         if type(other) is type(self):
-            self._check_step_ramp_compatibility(other)
             new_x = Tabulation._xoverlap(self.x, other.x)
             return Tabulation(new_x, self(new_x) * other(new_x))
 
@@ -280,25 +306,14 @@ class Tabulation(object):
         """Divide two Tabulations returning a new Tabulation.
 
         Parameters:
-            other (Tabulation or float): If a Tabulation is given, divide the current
-                Tabulation by this Tabulation at each interpolation point. If a float is
-                given, scale the current Tabulation's y-coordinates uniformly.
+            other (float): Scale the current Tabulation's y-coordinates uniformly by
+                dividing by the given value.
 
         Returns:
             Tabulation: The new Tabulation.
-
-        Notes:
-            The new domain is the intersection of the domains of the current Tabulation
-            and the given Tabulation.
         """
 
-        if type(other) is type(self):
-            self._check_step_ramp_compatibility(other)
-            new_x = Tabulation._xoverlap(self.x, other.x)
-            return Tabulation(new_x, self(new_x) / other(new_x))
-
-        # Otherwise just scale the y-values
-        elif np.shape(other) == ():
+        if np.shape(other) == ():
             return Tabulation(self.x, self.y / other)
 
         raise ValueError("Cannot divide Tabulation by given value")
@@ -307,28 +322,24 @@ class Tabulation(object):
         """Add two Tabulations returning a new Tabulation.
 
         Parameters:
-            other (Tabulation or float): If a Tabulation is given, add it to the current
-                Tabulation at each interpolation point. If a float is given, add it to
-                each of the current Tabulation's y-coordinates uniformly.
+            other (Tabulation): The Tabulation to add to the current Tabulation.
 
         Returns:
             Tabulation: The new Tabulation.
 
         Notes:
-            The new domain is the union of the domains of the current Tabulation and
-            the given Tabulation.
-
-            A constant added to a Tabulation will still return zero outside the domain.
+            The new domain is the union of the domains of the current Tabulation and the
+            given Tabulation. The resulting Tabulation will have x-coordinates that are
+            the union of the x-coordinates of the current Tabulation and the other
+            Tabulation. In addition, additional x-coordinates may be added as necessary to
+            ensure the proper behavior in the presence of Tabulations with non-zero
+            leading or trailing edges.
         """
 
         if type(other) is type(self):
-            self._check_step_ramp_compatibility(other)
-            new_x = Tabulation._xmerge(self.x, other.x)
-            return Tabulation(new_x, self(new_x) + other(new_x))
-
-        # Otherwise just shift the y-values
-        elif np.shape(other) == ():
-            return Tabulation(self.x, self.y + other)
+            t1, t2 = self._add_ramps_as_necessary(self, other)
+            new_x = Tabulation._xmerge(t1.x, t2.x)
+            return Tabulation(new_x, t1(new_x) + t2(new_x))
 
         raise ValueError("Cannot add Tabulation by given value")
 
@@ -336,29 +347,24 @@ class Tabulation(object):
         """Subtract two Tabulations returning a new Tabulation.
 
         Parameters:
-            other (Tabulation or float): If a Tabulation is given, subtract it from the
-                current Tabulation at each interpolation point. If a float is given,
-                subtract it from each of the current Tabulation's y-coordinates uniformly.
+            other (Tabulation): The Tabulation to subtract from the current Tabulation.
 
         Returns:
             Tabulation: The new Tabulation.
 
         Notes:
-            The new domain is the union of the domains of the current Tabulation and
-            the given Tabulation.
-
-            A constant subtracted from a Tabulation will still return zero outside the
-            domain.
+            The new domain is the union of the domains of the current Tabulation and the
+            given Tabulation. The resulting Tabulation will have x-coordinates that are
+            the union of the x-coordinates of the current Tabulation and the other
+            Tabulation. In addition, additional x-coordinates may be added as necessary to
+            ensure the proper behavior in the presence of Tabulations with non-zero
+            leading or trailing edges.
         """
 
         if type(other) is type(self):
-            self._check_step_ramp_compatibility(other)
-            new_x = Tabulation._xmerge(self.x, other.x)
-            return Tabulation(new_x, self(new_x) - other(new_x))
-
-        # Otherwise just shift the y-values
-        elif np.shape(other) == ():
-            return Tabulation(self.x, self.y - other)
+            t1, t2 = self._add_ramps_as_necessary(self, other)
+            new_x = Tabulation._xmerge(t1.x, t2.x)
+            return Tabulation(new_x, t1(new_x) - t2(new_x))
 
         raise ValueError("Cannot subtract Tabulation by given value")
 
@@ -374,13 +380,17 @@ class Tabulation(object):
             Tabulation: The current Tabulation mutated with the new values.
 
         Notes:
-            The new domain is the intersection of the given domains.
+            The new domain is the intersection of the domains of the current Tabulation
+            and the given Tabulation. Because the resulting Tabulation is only computed
+            at the existing linear interpolation points, and the resulting Tabulation
+            is also linearly interpolated, the values between interpolation points will
+            not be accurate (a quadratic interpolation would be required).
         """
 
         if type(other) is type(self):
-            self._check_step_ramp_compatibility(other)
-            new_x = Tabulation._xoverlap(self.x, other.x)
-            return self._update(new_x, self(new_x) * other(new_x))._trim()
+            t1, t2 = self._add_ramps_as_necessary(self, other)
+            new_x = Tabulation._xoverlap(t1.x, t2.x)
+            return self._update(new_x, t1(new_x) * t2(new_x))
 
         # Otherwise just scale the y-values
         elif np.shape(other) == ():
@@ -392,24 +402,14 @@ class Tabulation(object):
         """Divide two Tabulations in place.
 
         Parameters:
-            other (Tabulation or float): If a Tabulation is given, divide the current
-                Tabulation by this Tabulation at each interpolation point. If a float is
-                given, scale the y-coordinates uniformly.
+            other (float): Scale the current Tabulation's y-coordinates uniformly by
+                dividing by the given value.
 
         Returns:
             Tabulation: The current Tabulation mutated with the new values.
-
-        Notes:
-            The new domain is the intersection of the given domains.
         """
 
-        if type(other) is type(self):
-            self._check_step_ramp_compatibility(other)
-            new_x = Tabulation._xoverlap(self.x, other.x)
-            return self._update(new_x, self(new_x) / other(new_x))._trim()
-
-        # Otherwise just scale the y-values
-        elif np.shape(other) == ():
+        if np.shape(other) == ():
             return self._update_y(self.y / other)
 
         raise ValueError("Cannot divide Tabulation in-place by given value")
@@ -418,27 +418,24 @@ class Tabulation(object):
         """Add two Tabulations in place.
 
         Parameters:
-            other (Tabulation or float): If a Tabulation is given, add it to the current
-                Tabulation at each interpolation point. If a float is given, add it to
-                each of the y-coordinates uniformly.
+            other (Tabulation): The Tabulation to add to the current Tabulation.
 
         Returns:
             Tabulation: The current Tabulation mutated with the new values.
 
         Notes:
-            The new domain is the union of the given domains.
-
-            A constant added to a Tabulation will still return zero outside the domain.
+            The new domain is the union of the domains of the current Tabulation and the
+            given Tabulation. The resulting Tabulation will have x-coordinates that are
+            the union of the x-coordinates of the current Tabulation and the other
+            Tabulation. In addition, additional x-coordinates may be added as necessary to
+            ensure the proper behavior in the presence of Tabulations with non-zero
+            leading or trailing edges.
         """
 
         if type(other) is type(self):
-            self._check_step_ramp_compatibility(other)
-            new_x = Tabulation._xmerge(self.x, other.x)
-            return self._update(new_x, self(new_x) + other(new_x))
-
-        # Otherwise just shift the y-values
-        elif np.shape(other) == ():
-            return self._update_y(self.y + other)
+            t1, t2 = Tabulation._add_ramps_as_necessary(self, other)
+            new_x = Tabulation._xmerge(t1.x, t2.x)
+            return self._update(new_x, t1(new_x) + t2(new_x))
 
         raise ValueError("Cannot add Tabulation in-place by given value")
 
@@ -446,61 +443,30 @@ class Tabulation(object):
         """Subtract two Tabulations in place.
 
         Parameters:
-            other (Tabulation or float): If a Tabulation is given, subtract it from the
-                current Tabulation at each interpolation point. If a float is given,
-                subtract it from each of the y-coordinates uniformly.
+            other (Tabulation): The Tabulation to subtract from the current Tabulation.
 
         Returns:
             Tabulation: The current Tabulation mutated with the new values.
 
         Notes:
-            The new domain is the union of the given domains.
-
-            A constant subtracted from a Tabulation will still return zero outside the
-            domain.
+            The new domain is the union of the domains of the current Tabulation and the
+            given Tabulation. The resulting Tabulation will have x-coordinates that are
+            the union of the x-coordinates of the current Tabulation and the other
+            Tabulation. In addition, additional x-coordinates may be added as necessary to
+            ensure the proper behavior in the presence of Tabulations with non-zero
+            leading or trailing edges.
         """
 
         if type(other) is type(self):
-            self._check_step_ramp_compatibility(other)
-            new_x = Tabulation._xmerge(self.x, other.x)
-            return self._update(new_x, self(new_x) - other(new_x))
-
-        # Otherwise just shift the y-values
-        elif np.shape(other) == ():
-            return self._update_y(self.y - other)
+            t1, t2 = Tabulation._add_ramps_as_necessary(self, other)
+            new_x = Tabulation._xmerge(t1.x, t2.x)
+            return self._update(new_x, t1(new_x) - t2(new_x))
 
         raise ValueError("Cannot subtract Tabulation in-place by given value")
 
 ########################################
 # Additional methods
 ########################################
-
-    def trim(self):
-        """Return a new Tabulation where zero-valued leading/trailing regions are removed.
-
-        Returns:
-            Tabulation: A copy of the current Tabulation object with any zero-valued
-            leading or trailing regions removed. A single leading or trailing zero
-            will be left to anchor the interpolation as necessary.
-
-        Notes:
-            Calling this function is not generally necessary, as it is performed
-            automatically by various methods.
-        """
-
-        # Save the original arrays
-        x = self.x
-        y = self.y
-
-        # Create a trimmed version
-        self._trim()        # operates in-place
-        result = Tabulation(self.x, self.y)
-
-        # Restore the original
-        self.x = x
-        self.y = y
-
-        return result
 
     def domain(self):
         """Return the range of x-coordinates for which values have been provided.
@@ -521,23 +487,11 @@ class Tabulation(object):
         Returns:
             Tabulation: The new Tabulation, identical to the current Tabulation except
             that the x domain is now (xmin, xmax). If either x coordinate is beyond
-            the range of the current domain, zeros are assumed for the y values if
-            the current Tabulation is ramp-style. Otherwise, an exception is raised.
-
-        Raises:
-            ValueError: If either x coordinate is beyond the range of the current
-            domain, and current Tabulation is not ramp-style.
-
-        Notes:
-            If the clip results in a leading or trailing zero value when there was
-            not one previously, the Tabulation will now be treated as ramp-style.
+            the range of the current domain, it is set to the current edge of the
+            domain.
         """
 
-        new_x = Tabulation._xmerge(self.x, np.array((xmin, xmax)))
-        if new_x[0] < self.x[0] and self.y[0] != 0:
-            raise ValueError("Clipping operation changed leading edge to ramp-style")
-        if new_x[-1] > self.x[-1] and self.y[-1] != 0:
-            raise ValueError("Clipping operation changed trailing edge to ramp-style")
+        new_x = Tabulation._xoverlap(self.x, np.array((xmin, xmax)))
         mask = (new_x >= xmin) & (new_x <= xmax)
         return self.resample(new_x[mask])
 
@@ -604,16 +558,62 @@ class Tabulation(object):
             new_x (array-like): The new x-coordinates.
 
         Returns:
-            Tabulation: A new Tabulation equivalent to the current Tabulation but
-            sampled only at the given x-coordinates.
+            Tabulation: A new Tabulation equivalent to the current Tabulation but sampled
+            only at the given x-coordinates.
+
+        Notes:
+            If the leading or trailing X coordinate corresponds to a non-zero value, then
+            there will be a step at that edge. If the leading or trailing X coordinate
+            corresponds to a zero value, then there will be a ramp at that edge. The
+            resulting Tabulation is trimmed such that the domain does not include any
+            zero-valued coordinates except for those necessary to anchor the leading or
+            trailing edge.
         """
 
         if new_x is None:
             # If new_x is None, return a copy of the current tabulation
             return Tabulation(self.x, self.y.copy())
 
+        new_x = np.asarray(new_x, dtype=np.double)
+
+        mask = new_x[:-1] < new_x[1:]
+        if not np.all(mask):
+            mask = new_x[:-1] > new_x[1:]
+            if not np.all(mask):
+                raise ValueError("x-coordinates are not monotonic")
+            new_x = new_x[::-1]
+
+        if len(new_x) == 0 or new_x[-1] < self.x[0] or new_x[0] > self.x[-1]:
+            # Resample is entirely outside the current domain, so just return a zero
+            # Tabulation.
+            return Tabulation([0.], [0.])
+
         return Tabulation(new_x, self(new_x))
 
+
+        # our_x = self.x
+        # our_y = self.y
+
+        # # If we are resampling before the leading edge of the domain, and we have a
+        # # step function, then insert a fake x-coordinate to maintain the step appearance.
+        # if new_x[0] < our_x[0] and our_y[0] != 0:
+        #     eps_x = our_x[0]-.001 # math.nextafter(our_x[0], -math.inf)  # Epsilon lower
+        #     our_x = np.insert(our_x, 0, eps_x)
+        #     our_y = np.insert(our_y, 0, 0.)
+        #     print(our_x)
+        #     print(our_y)
+
+        # # If we are resampling after the traliing edge of the domain, and we have a
+        # # step function, then insert a fake x-coordinate to maintain the step appearance.
+        # if new_x[-1] > our_x[-1] and our_y[-1] != 0:
+        #     eps_x = math.nextafter(our_x[-1], math.inf)  # Epsilon higher
+        #     loc = np.where(new_x > our_x[-1])[0][0]
+        #     our_x = np.insert(our_x, loc+1, eps_x)
+        #     our_y = np.insert(our_y, loc+1, 0.)
+
+        # our_tabulation = self
+        # if our_x is not self.x:
+        #     our_tabulation = Tabulation(our_x, our_y)
     def subsample(self, new_x):
         """Return a new Tabulation re-sampled at a list of x-coords plus existing ones.
 
@@ -621,9 +621,21 @@ class Tabulation(object):
             new_x (array-like): The new x-coordinates.
 
         Returns:
-            Tabulation: A new Tabulation equivalent to the current Tabulation but
-            sampled only at the given x-coordinates.
+            Tabulation: A new Tabulation equivalent to the current Tabulation but sampled
+            at both the existing x-coordinates and the given x-coordinates.
+
+        Notes:
+            If the leading or trailing X coordinate corresponds to a non-zero value, then
+            there will be a step at that edge. If the leading or trailing X coordinate
+            corresponds to a zero value, then there will be a ramp at that edge. The
+            resulting Tabulation is trimmed such that the domain does not include any
+            zero-valued coordinates except for those necessary to anchor the leading or
+            trailing edge.
         """
+
+        if new_x is None:
+            # If new_x is None, return a copy of the current tabulation
+            return Tabulation(self.x, self.y.copy())
 
         new_x = Tabulation._xmerge(new_x, self.x)
         return Tabulation(new_x, self(new_x))
