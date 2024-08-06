@@ -6,8 +6,10 @@ Tabulation class,
 PDS Ring-Moon Systems Node, SETI Institute
 
 The Tabulation class represents a mathematical function by a sequence of linear
-interpolations between points defined by arrays of x and y coordinates. See the
-documentation for the Tabulation class for full details.
+interpolations between points defined by arrays of x and y coordinates. Although optimized
+to model filter bandpasses and spectral flux, the class is sufficiently general to be used
+in a wide range of applications. See the documentation for the Tabulation class for full
+details.
 """
 
 import math
@@ -25,7 +27,9 @@ class Tabulation(object):
 
     The interpolations are defined between points defined by arrays of x and y
     coordinates. The function is treated as equal to zero outside the range of the x
-    coordinates, with a step at the provided leading and trailing x coordinates.
+    coordinates, with a step at the provided leading and trailing x coordinates. Although
+    optimized to model filter bandpasses and spectral flux, the class is sufficiently
+    general to be used in a wide range of applications.
 
     In general, zero values (either supplied or computed) at either the leading or
     trailing ends are removed. However, if explicitly supplied, one leading and/or
@@ -176,6 +180,9 @@ class Tabulation(object):
         Returns:
             np.array: The merged array of x-coordinates.
 
+        Raises:
+            ValueError: If the domains do not overlap.
+
         Notes:
             The domains must have some overlap. The resulting domain will range from the
             minimum of the two arrays to the maximum of the two arrays.
@@ -183,7 +190,7 @@ class Tabulation(object):
 
         # Confirm overlap
         if x1[0] > x2[-1] or x2[0] > x1[-1]:
-            raise ValueError("domains do not overlap")
+            raise ValueError("Domains do not overlap")
 
         # Merge and sort
         sorted = np.sort(np.hstack((x1, x2)))
@@ -203,6 +210,9 @@ class Tabulation(object):
         Returns:
             np.array: The merged array of x-coordinates, limited to those values that
             fall within the intersection of the domains of the two arrays.
+
+        Raises:
+            ValueError: If the domains do not overlap.
 
         Notes:
             The domains must have some overlap. The resulting domain will include only
@@ -284,6 +294,10 @@ class Tabulation(object):
         Returns:
             Tabulation: The new Tabulation.
 
+        Raises:
+            ValueError: If the domains of the two Tabulations do not overlap.
+            ValueError: If the Tabulation can not be multiplied by the given value.
+
         Notes:
             The new domain is the intersection of the domains of the current Tabulation
             and the given Tabulation. Because the resulting Tabulation is only computed
@@ -309,6 +323,9 @@ class Tabulation(object):
             other (float): Scale the current Tabulation's y-coordinates uniformly by
                 dividing by the given value.
 
+        Raises:
+            ValueError: If the Tabulation can not be multiplied by the given value.
+
         Returns:
             Tabulation: The new Tabulation.
         """
@@ -326,6 +343,10 @@ class Tabulation(object):
 
         Returns:
             Tabulation: The new Tabulation.
+
+        Raises:
+            ValueError: If the domains of the two Tabulations do not overlap.
+            ValueError: If the Tabulation can not be added to the given value.
 
         Notes:
             The new domain is the union of the domains of the current Tabulation and the
@@ -351,6 +372,10 @@ class Tabulation(object):
 
         Returns:
             Tabulation: The new Tabulation.
+
+        Raises:
+            ValueError: If the domains of the two Tabulations do not overlap.
+            ValueError: If the Tabulation can not be subtracted by the given value.
 
         Notes:
             The new domain is the union of the domains of the current Tabulation and the
@@ -379,6 +404,10 @@ class Tabulation(object):
         Returns:
             Tabulation: The current Tabulation mutated with the new values.
 
+        Raises:
+            ValueError: If the domains of the two Tabulations do not overlap.
+            ValueError: If the Tabulation can not be multiplied by the given value.
+
         Notes:
             The new domain is the intersection of the domains of the current Tabulation
             and the given Tabulation. Because the resulting Tabulation is only computed
@@ -405,6 +434,9 @@ class Tabulation(object):
             other (float): Scale the current Tabulation's y-coordinates uniformly by
                 dividing by the given value.
 
+        Raises:
+            ValueError: If the Tabulation can not be divided by the given value.
+
         Returns:
             Tabulation: The current Tabulation mutated with the new values.
         """
@@ -422,6 +454,10 @@ class Tabulation(object):
 
         Returns:
             Tabulation: The current Tabulation mutated with the new values.
+
+        Raises:
+            ValueError: If the domains of the two Tabulations do not overlap.
+            ValueError: If the Tabulation can not be added to the given value.
 
         Notes:
             The new domain is the union of the domains of the current Tabulation and the
@@ -447,6 +483,10 @@ class Tabulation(object):
 
         Returns:
             Tabulation: The current Tabulation mutated with the new values.
+
+        Raises:
+            ValueError: If the domains of the two Tabulations do not overlap.
+            ValueError: If the Tabulation can not be subtracted by the given value.
 
         Notes:
             The new domain is the union of the domains of the current Tabulation and the
@@ -488,6 +528,10 @@ class Tabulation(object):
             Tabulation: The new Tabulation, identical to the current Tabulation except
             that the x domain is now (xmin, xmax). If either x coordinate is beyond
             the range of the current domain, it is set to the current edge of the
+            domain.
+
+        Raises:
+            ValueError: If the clip domain does not overlap with the Tabulation
             domain.
         """
 
@@ -590,30 +634,6 @@ class Tabulation(object):
 
         return Tabulation(new_x, self(new_x))
 
-
-        # our_x = self.x
-        # our_y = self.y
-
-        # # If we are resampling before the leading edge of the domain, and we have a
-        # # step function, then insert a fake x-coordinate to maintain the step appearance.
-        # if new_x[0] < our_x[0] and our_y[0] != 0:
-        #     eps_x = our_x[0]-.001 # math.nextafter(our_x[0], -math.inf)  # Epsilon lower
-        #     our_x = np.insert(our_x, 0, eps_x)
-        #     our_y = np.insert(our_y, 0, 0.)
-        #     print(our_x)
-        #     print(our_y)
-
-        # # If we are resampling after the traliing edge of the domain, and we have a
-        # # step function, then insert a fake x-coordinate to maintain the step appearance.
-        # if new_x[-1] > our_x[-1] and our_y[-1] != 0:
-        #     eps_x = math.nextafter(our_x[-1], math.inf)  # Epsilon higher
-        #     loc = np.where(new_x > our_x[-1])[0][0]
-        #     our_x = np.insert(our_x, loc+1, eps_x)
-        #     our_y = np.insert(our_y, loc+1, 0.)
-
-        # our_tabulation = self
-        # if our_x is not self.x:
-        #     our_tabulation = Tabulation(our_x, our_y)
     def subsample(self, new_x):
         """Return a new Tabulation re-sampled at a list of x-coords plus existing ones.
 
@@ -640,70 +660,100 @@ class Tabulation(object):
         new_x = Tabulation._xmerge(new_x, self.x)
         return Tabulation(new_x, self(new_x))
 
-    def mean(self):
-        """Return the mean value of the Tabulation.
+    def x_mean(self, dx=None):
+        """Return the weighted center x coordinate of the Tabulation.
+
+        Parameters:
+            dx (float, optional): The minimum, uniform step size to use when evaluating the
+                center position. If omitted, no resampling is performed.
 
         Returns:
-            float: The mean across the domain, ignoring leading and trailing zero regions.
+            float: The x coordinate that corresponds to the weighted center of the
+                function.
+        """
+
+        self._trim()
+
+        if dx is None:
+            # y cannot be a shallow copy...
+            resampled = Tabulation(self.x, self.y.copy())
+        else:
+            (x0, x1) = self.domain()
+            new_x = np.arange(x0 + dx, x1, dx).astype("float")
+            resampled = self.subsample(new_x)
+
+        integ0 = resampled.integral()
+
+        # ...because we change y in-place
+        resampled.y *= resampled.x
+        integ1 = resampled.integral()
+
+        return integ1/integ0
+
+    def bandwidth_rms(self, dx=None):
+        """Return the root-mean-square width of the Tabulation.
+
+        This is the mean value of (y * (x - x_mean)**2)**(1/2).
+
+        Parameters:
+            dx (float, optional): The minimum, uniform step size to use when evaluating the
+                center position. If omitted, no resampling is performed.
+
+        Returns:
+            float: The RMS width of the Tabulation.
+        """
+
+        self._trim()
+
+        if dx is None:
+            # y cannot be a shallow copy...
+            resampled = Tabulation(self.x, self.y.copy())
+        else:
+            (x0, x1) = self.domain()
+            new_x = np.arange(x0 + dx, x1, dx).astype("float")
+            resampled = self.subsample(new_x)
+
+        integ0 = resampled.integral()
+
+        # ...because we change y in-place
+        resampled.y *= resampled.x
+        integ1 = resampled.integral()
+
+        resampled.y *= resampled.x          # ...twice!
+        integ2 = resampled.integral()
+
+        return np.sqrt(((integ2*integ0 - integ1**2) / integ0**2))
+
+    def pivot_mean(self, precision=0.01):
+        """Return the "pivot" mean value of the tabulation.
+
+        The pivot value is the mean value of y(x) d(log(x)).
+        Note all x must be positive.
+
+        Parameters:
+            precision (float, optional): The step size at which to resample the
+                Tabulation.
+
+        Returns:
+            float: The pivot mean of the Tabulation.
         """
 
         self._trim()
         (x0, x1) = self.domain()
 
-        integ = self.integral()
+        log_x0 = np.log(x0)
+        log_x1 = np.log(x1)
+        log_dx = np.log(1. + precision)
 
-        return float(integ / (x1-x0))
+        new_x = np.exp(np.arange(log_x0, log_x1 + log_dx, log_dx))
 
-    # def bandwidth_rms(self):
-    #     """Return the root-mean-square width of the Tabulation.
+        resampled = self.subsample(new_x)
+        integ1 = resampled.integral()
 
-    #     This is the mean value of (y * (x - x_mean)**2)**(1/2).
+        resampled.y /= resampled.x
+        integ0 = resampled.integral()
 
-    #     Returns:
-    #         float: The RMS width of the Tabulation.
-    #     """
-
-    #     self._trim()
-    #     (x0, x1) = self.domain()
-    #     x_mean = (x0 + x1) / 2
-
-    #     integ0 = resampled.integral()
-
-    #     resampled.y *= resampled.x          # ...because we change y in-place
-    #     integ1 = resampled.integral()
-
-    #     resampled.y *= resampled.x          # ...twice!
-    #     integ2 = resampled.integral()
-
-    #     return float(np.sqrt(((integ2*integ0 - integ1**2) / integ0**2)))
-
-    # def pivot_mean(self, precision=0.01):
-    #     """Return the "pivot" mean value of the tabulation.
-
-    #     The pivot value is the mean value of y(x) d(log(x)).
-    #     Note all x must be positive.
-
-    #     Parameters:
-    #         precision (float, optional): The step size at which to resample the
-    #             Tabulation.
-
-    #     Returns:
-    #         float: The pivot mean of the Tabulation.
-    #     """
-
-    #     self._trim()
-    #     (x0, x1) = self.domain()
-
-    #     log_x0 = np.log(x0)
-    #     log_x1 = np.log(x1)
-    #     log_dx = np.log(1. + precision)
-
-    #     new_x = np.exp(np.arange(log_x0, log_x1 + log_dx, log_dx))
-
-    #     resampled = self.subsample(new_x)
-    #     integ = resampled.integral()
-
-    #     return float(integ / (log_x1 - log_x0))
+        return integ1/integ0
 
     def fwhm(self, fraction=0.5):
         """Return the full-width-half-maximum of the Tabulation.

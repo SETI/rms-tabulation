@@ -12,6 +12,12 @@ class Test_Tabulation(unittest.TestCase):
 
     def runTest(self):
 
+        tab = Tabulation([], [])
+        self.assertEqual(tab.domain(), (0., 0.))
+        self.assertEqual(tab(0), 0)
+        self.assertEqual(tab(-1), 0)
+        self.assertEqual(tab(1), 0)
+
         # Ramp-style edges
         # xr = [0, 1, 2, 3, 4, 5, 6, 7, 8]
         # yr = [0, 0, 0, 1, 2, 6, 1, 0, 0]
@@ -46,12 +52,16 @@ class Test_Tabulation(unittest.TestCase):
         self.assertTrue(np.all(np.array([3.5, 4.5, 5.5]) == tabs([3.5, 4.5, 5.5])))
         self.assertTrue(tabs.integral(), 50.)
 
-        # RESAMPLE #
+        # RESAMPLE
+
+        resampled = tabs.resample(None)
+
+        self.assertTrue(np.all(resampled.x == xs))
+        self.assertTrue(np.all(resampled.y == ys))
 
         with self.assertRaises(ValueError) as context:
             tabs.resample([-4, -5, -3])
-        self.assertEqual(
-            str(context.exception), "x-coordinates are not monotonic")
+        self.assertEqual(str(context.exception), "x-coordinates are not monotonic")
 
         # All off left side
         resampled = tabs.resample([-5, -4])
@@ -71,6 +81,10 @@ class Test_Tabulation(unittest.TestCase):
         self.assertEqual(resampled.x.shape, (19,))
         self.assertEqual(resampled.domain(), (1, 10))
         resampled = tabr.resample(np.arange(1, 10.1, 0.5))
+        self.assertTrue(np.all(resampled.y == resampled.x))
+        self.assertEqual(resampled.x.shape, (19,))
+        self.assertEqual(resampled.domain(), (1, 10))
+        resampled = tabr.resample(np.arange(10, 0.5, -0.5))
         self.assertTrue(np.all(resampled.y == resampled.x))
         self.assertEqual(resampled.x.shape, (19,))
         self.assertEqual(resampled.domain(), (1, 10))
@@ -114,6 +128,11 @@ class Test_Tabulation(unittest.TestCase):
         self.assertEqual(resampled.domain(), (10, 15))
 
         # SUBSAMPLE
+
+        subsampled = tabs.subsample(None)
+
+        self.assertTrue(np.all(subsampled.x == xs))
+        self.assertTrue(np.all(subsampled.y == ys))
 
         subsampled = tabs.subsample(np.array([5.2, 5.5, 6., 7.]))
         self.assertTrue(np.all(subsampled.x ==
@@ -164,273 +183,252 @@ class Test_Tabulation(unittest.TestCase):
                                                   8.,  9])))
         self.assertTrue(np.all(res.y == np.array([1, 2, 3, 3.499999999999999, 4.5,
                                                   6, 8, 5, 3.999999999999999, 3, 2])))
-        self.assertTrue(np.all(np.abs((tab1(off_xlist)+tab2(off_xlist)-res(off_xlist)))<1e-10))
+        self.assertTrue(np.all(
+            np.abs((tab1(off_xlist) + tab2(off_xlist) - res(off_xlist))) < 1e-10))
 
         res = tab2 + tab1
-        self.assertTrue(np.all(np.abs((tab2(off_xlist)+tab1(off_xlist)-res(off_xlist)))<1e-10))
+        self.assertTrue(
+            np.all(np.abs((tab2(off_xlist) + tab1(off_xlist) - res(off_xlist))) < 1e-10))
 
         res = tab3 + tab4
-        self.assertTrue(np.all(res.x == np.array([1., 2., 3., 4., 4.3, 5.3, 6.1,
-                                                  6.3, 7.1, 7.3, 8.1, 8.4])))
-        self.assertTrue(np.all(res.y-np.array([0., 1., 2., 3., 4., 4.5, 5.9,
-                                               6.2, 3., 2.2, 3., 0.]))<1e-10)
-        self.assertTrue(np.all(np.abs((tab3(off_xlist)+tab4(off_xlist)-res(off_xlist)))<1e-10))
+        self.assertTrue(
+            np.all(res.x == np.array([1., 2., 3., 4., 4.3, 5.3, 6.1,
+                                      6.3, 7.1, 7.3, 8.1, 8.4])))
+        self.assertTrue(
+            np.all(res.y-np.array([0., 1., 2., 3., 4., 4.5, 5.9,
+                                   6.2, 3., 2.2, 3., 0.])) < 1e-10)
+        self.assertTrue(
+            np.all(np.abs((tab3(off_xlist) + tab4(off_xlist) - res(off_xlist))) < 1e-10))
 
         res = tab4 + tab3
-        self.assertTrue(np.all(np.abs((tab4(off_xlist)+tab3(off_xlist)-res(off_xlist)))<1e-10))
+        self.assertTrue(
+            np.all(np.abs((tab4(off_xlist) + tab3(off_xlist) - res(off_xlist))) < 1e-10))
 
         res = tab1 + tab3
-        self.assertTrue(np.all(np.abs((tab1(off_xlist)+tab3(off_xlist)-res(off_xlist)))<1e-10))
+        self.assertTrue(
+            np.all(np.abs((tab1(off_xlist) + tab3(off_xlist) - res(off_xlist))) < 1e-10))
 
         res = tab3 + tab1
-        self.assertTrue(np.all(np.abs((tab3(off_xlist)+tab1(off_xlist)-res(off_xlist)))<1e-10))
+        self.assertTrue(
+            np.all(np.abs((tab3(off_xlist) + tab1(off_xlist) - res(off_xlist))) < 1e-10))
 
         res = tab2 + tab4
-        self.assertTrue(np.all(np.abs((tab2(off_xlist)+tab4(off_xlist)-res(off_xlist)))<1e-10))
+        self.assertTrue(
+            np.all(np.abs((tab2(off_xlist) + tab4(off_xlist) - res(off_xlist))) < 1e-10))
 
         res = tab4 + tab2
-        self.assertTrue(np.all(np.abs((tab4(off_xlist)+tab2(off_xlist)-res(off_xlist)))<1e-10))
+        self.assertTrue(
+            np.all(np.abs((tab4(off_xlist) + tab2(off_xlist) - res(off_xlist))) < 1e-10))
 
         tab5 = Tabulation(x1, y1)
         tab5 += tab2
-        self.assertTrue(np.all(np.abs((tab1(off_xlist)+tab2(off_xlist)-tab5(off_xlist)))<1e-10))
+        self.assertTrue(
+            np.all(np.abs((tab1(off_xlist) + tab2(off_xlist)-tab5(off_xlist))) < 1e-10))
 
         with self.assertRaises(ValueError) as context:
             _ = tab1 + np.array([])
-        self.assertEqual(
-            str(context.exception),
-            "Cannot add Tabulation by given value"
-            )
+        self.assertEqual(str(context.exception), "Cannot add Tabulation by given value")
 
         with self.assertRaises(ValueError) as context:
             _ = tab1 + 5
-        self.assertEqual(
-            str(context.exception),
-            "Cannot add Tabulation by given value"
-            )
+        self.assertEqual(str(context.exception), "Cannot add Tabulation by given value")
 
         with self.assertRaises(ValueError) as context:
             tab1 += np.array([])
-        self.assertEqual(
-            str(context.exception),
-            "Cannot add Tabulation in-place by given value"
-            )
+        self.assertEqual(str(context.exception),
+                         "Cannot add Tabulation in-place by given value")
 
         with self.assertRaises(ValueError) as context:
             tab1 += 5
-        self.assertEqual(
-            str(context.exception),
-            "Cannot add Tabulation in-place by given value"
-            )
+        self.assertEqual(str(context.exception),
+                         "Cannot add Tabulation in-place by given value")
 
         # SUBTRACTION
 
         res = tab1 - tab2
-        self.assertTrue(np.all(np.abs((tab1(off_xlist)-tab2(off_xlist)-res(off_xlist)))<1e-10))
+        self.assertTrue(
+            np.all(np.abs((tab1(off_xlist)-tab2(off_xlist) - res(off_xlist))) < 1e-10))
 
         res = tab2 - tab1
-        self.assertTrue(np.all(np.abs((tab2(off_xlist)-tab1(off_xlist)-res(off_xlist)))<1e-10))
+        self.assertTrue(
+            np.all(np.abs((tab2(off_xlist)-tab1(off_xlist) - res(off_xlist))) < 1e-10))
 
         res = tab3 - tab4
-        self.assertTrue(np.all(np.abs((tab3(off_xlist)-tab4(off_xlist)-res(off_xlist)))<1e-10))
+        self.assertTrue(
+            np.all(np.abs((tab3(off_xlist)-tab4(off_xlist) - res(off_xlist))) < 1e-10))
 
         res = tab4 - tab3
-        self.assertTrue(np.all(np.abs((tab4(off_xlist)-tab3(off_xlist)-res(off_xlist)))<1e-10))
+        self.assertTrue(
+            np.all(np.abs((tab4(off_xlist)-tab3(off_xlist) - res(off_xlist))) < 1e-10))
 
         res = tab1 - tab3
-        self.assertTrue(np.all(np.abs((tab1(off_xlist)-tab3(off_xlist)-res(off_xlist)))<1e-10))
+        self.assertTrue(
+            np.all(np.abs((tab1(off_xlist)-tab3(off_xlist) - res(off_xlist))) < 1e-10))
 
         res = tab3 - tab1
-        self.assertTrue(np.all(np.abs((tab3(off_xlist)-tab1(off_xlist)-res(off_xlist)))<1e-10))
+        self.assertTrue(
+            np.all(np.abs((tab3(off_xlist)-tab1(off_xlist) - res(off_xlist))) < 1e-10))
 
         res = tab2 - tab4
-        self.assertTrue(np.all(np.abs((tab2(off_xlist)-tab4(off_xlist)-res(off_xlist)))<1e-10))
+        self.assertTrue(
+            np.all(np.abs((tab2(off_xlist)-tab4(off_xlist) - res(off_xlist))) < 1e-10))
 
         res = tab4 - tab2
-        self.assertTrue(np.all(np.abs((tab4(off_xlist)-tab2(off_xlist)-res(off_xlist)))<1e-10))
+        self.assertTrue(
+            np.all(np.abs((tab4(off_xlist)-tab2(off_xlist) - res(off_xlist))) < 1e-10))
 
         tab5 = Tabulation(x1, y1)
         tab5 -= tab2
-        self.assertTrue(np.all(np.abs((tab1(off_xlist)-tab2(off_xlist)-tab5(off_xlist)))<1e-10))
+        self.assertTrue(
+            np.all(np.abs((tab1(off_xlist)-tab2(off_xlist)-tab5(off_xlist))) < 1e-10))
 
         with self.assertRaises(ValueError) as context:
             _ = tab1 - np.array([])
-        self.assertEqual(
-            str(context.exception),
-            "Cannot subtract Tabulation by given value"
-            )
+        self.assertEqual(str(context.exception),
+                         "Cannot subtract Tabulation by given value")
 
         with self.assertRaises(ValueError) as context:
             _ = tab1 - 5
-        self.assertEqual(
-            str(context.exception),
-            "Cannot subtract Tabulation by given value"
-            )
+        self.assertEqual(str(context.exception),
+                         "Cannot subtract Tabulation by given value")
 
         with self.assertRaises(ValueError) as context:
             tab1 -= np.array([])
-        self.assertEqual(
-            str(context.exception),
-            "Cannot subtract Tabulation in-place by given value"
-            )
+        self.assertEqual(str(context.exception),
+                         "Cannot subtract Tabulation in-place by given value")
 
         with self.assertRaises(ValueError) as context:
             tab1 -= 5
-        self.assertEqual(
-            str(context.exception),
-            "Cannot subtract Tabulation in-place by given value"
-            )
+        self.assertEqual(str(context.exception),
+                         "Cannot subtract Tabulation in-place by given value")
 
         # MULTIPLICATION
 
         res = tab1 * tab2
-        self.assertTrue(np.all(np.abs((tab1(tab1.x)*tab2(tab1.x)-res(tab1.x)))<1e-10))
-        self.assertTrue(np.all(np.abs((tab1(tab2.x)*tab2(tab2.x)-res(tab2.x)))<1e-10))
+        self.assertTrue(np.all(np.abs((tab1(tab1.x)*tab2(tab1.x) - res(tab1.x))) < 1e-10))
+        self.assertTrue(np.all(np.abs((tab1(tab2.x)*tab2(tab2.x) - res(tab2.x))) < 1e-10))
 
         res = tab2 * tab1
-        self.assertTrue(np.all(np.abs((tab1(tab1.x)*tab2(tab1.x)-res(tab1.x)))<1e-10))
-        self.assertTrue(np.all(np.abs((tab1(tab2.x)*tab2(tab2.x)-res(tab2.x)))<1e-10))
+        self.assertTrue(np.all(np.abs((tab1(tab1.x)*tab2(tab1.x) - res(tab1.x))) < 1e-10))
+        self.assertTrue(np.all(np.abs((tab1(tab2.x)*tab2(tab2.x) - res(tab2.x))) < 1e-10))
 
         res = tab3 * tab4
-        self.assertTrue(np.all(np.abs((tab3(tab3.x)*tab4(tab3.x)-res(tab3.x)))<1e-10))
-        self.assertTrue(np.all(np.abs((tab3(tab4.x)*tab4(tab4.x)-res(tab4.x)))<1e-10))
+        self.assertTrue(np.all(np.abs((tab3(tab3.x)*tab4(tab3.x) - res(tab3.x))) < 1e-10))
+        self.assertTrue(np.all(np.abs((tab3(tab4.x)*tab4(tab4.x) - res(tab4.x))) < 1e-10))
 
         res = tab4 * tab3
-        self.assertTrue(np.all(np.abs((tab3(tab3.x)*tab4(tab3.x)-res(tab3.x)))<1e-10))
-        self.assertTrue(np.all(np.abs((tab3(tab4.x)*tab4(tab4.x)-res(tab4.x)))<1e-10))
+        self.assertTrue(np.all(np.abs((tab3(tab3.x)*tab4(tab3.x) - res(tab3.x))) < 1e-10))
+        self.assertTrue(np.all(np.abs((tab3(tab4.x)*tab4(tab4.x) - res(tab4.x))) < 1e-10))
 
         res = tab1 * tab3
-        self.assertTrue(np.all(np.abs((tab1(tab1.x)*tab3(tab1.x)-res(tab1.x)))<1e-10))
-        self.assertTrue(np.all(np.abs((tab1(tab3.x)*tab3(tab3.x)-res(tab3.x)))<1e-10))
+        self.assertTrue(np.all(np.abs((tab1(tab1.x)*tab3(tab1.x) - res(tab1.x))) < 1e-10))
+        self.assertTrue(np.all(np.abs((tab1(tab3.x)*tab3(tab3.x) - res(tab3.x))) < 1e-10))
 
         res = tab3 * tab1
-        self.assertTrue(np.all(np.abs((tab1(tab1.x)*tab3(tab1.x)-res(tab1.x)))<1e-10))
-        self.assertTrue(np.all(np.abs((tab1(tab3.x)*tab3(tab3.x)-res(tab3.x)))<1e-10))
+        self.assertTrue(np.all(np.abs((tab1(tab1.x)*tab3(tab1.x) - res(tab1.x))) < 1e-10))
+        self.assertTrue(np.all(np.abs((tab1(tab3.x)*tab3(tab3.x) - res(tab3.x))) < 1e-10))
 
         res = tab2 * tab4
-        self.assertTrue(np.all(np.abs((tab2(tab2.x)*tab4(tab2.x)-res(tab2.x)))<1e-10))
-        self.assertTrue(np.all(np.abs((tab2(tab4.x)*tab4(tab4.x)-res(tab4.x)))<1e-10))
+        self.assertTrue(np.all(np.abs((tab2(tab2.x)*tab4(tab2.x) - res(tab2.x))) < 1e-10))
+        self.assertTrue(np.all(np.abs((tab2(tab4.x)*tab4(tab4.x) - res(tab4.x))) < 1e-10))
 
         res = tab4 * tab2
-        self.assertTrue(np.all(np.abs((tab2(tab2.x)*tab4(tab2.x)-res(tab2.x)))<1e-10))
-        self.assertTrue(np.all(np.abs((tab2(tab4.x)*tab4(tab4.x)-res(tab4.x)))<1e-10))
+        self.assertTrue(np.all(np.abs((tab2(tab2.x)*tab4(tab2.x) - res(tab2.x))) < 1e-10))
+        self.assertTrue(np.all(np.abs((tab2(tab4.x)*tab4(tab4.x) - res(tab4.x))) < 1e-10))
 
         res = tab1 * 10
-        self.assertTrue(np.all(np.abs((tab1(off_xlist)*10-res(off_xlist)))<1e-10))
+        self.assertTrue(np.all(np.abs((tab1(off_xlist)*10 - res(off_xlist))) < 1e-10))
 
         tab5 = Tabulation(x1, y1)
         tab5 *= tab2
-        self.assertTrue(np.all(np.abs((tab1(tab1.x)*tab2(tab1.x)-tab5(tab1.x)))<1e-10))
+        self.assertTrue(np.all(np.abs((tab1(tab1.x)*tab2(tab1.x)-tab5(tab1.x))) < 1e-10))
 
         tab5 = Tabulation(x1, y1)
         tab5 *= 10
-        self.assertTrue(np.all(np.abs((tab1(off_xlist)*10-tab5(off_xlist)))<1e-10))
+        self.assertTrue(np.all(np.abs((tab1(off_xlist)*10-tab5(off_xlist))) < 1e-10))
 
         with self.assertRaises(ValueError) as context:
             _ = tab1 * np.array([])
-        self.assertEqual(
-            str(context.exception),
-            "Cannot multiply Tabulation by given value"
-            )
+        self.assertEqual(str(context.exception),
+                         "Cannot multiply Tabulation by given value")
 
         with self.assertRaises(ValueError) as context:
             tab1 *= np.array([])
-        self.assertEqual(
-            str(context.exception),
-            "Cannot multiply Tabulation in-place by given value"
-            )
+        self.assertEqual(str(context.exception),
+                         "Cannot multiply Tabulation in-place by given value")
 
         # DIVISION
 
         res = tab1 / 10
-        self.assertTrue(np.all(np.abs((tab1(off_xlist)/10-res(off_xlist)))<1e-10))
+        self.assertTrue(np.all(np.abs((tab1(off_xlist)/10 - res(off_xlist))) < 1e-10))
 
         tab5 = Tabulation(x1, y1)
         tab5 /= 10
-        self.assertTrue(np.all(np.abs((tab1(off_xlist)/10-tab5(off_xlist)))<1e-10))
+        self.assertTrue(np.all(np.abs((tab1(off_xlist)/10 - tab5(off_xlist))) < 1e-10))
 
         with self.assertRaises(ValueError) as context:
             _ = tab1 / np.array([])
-        self.assertEqual(
-            str(context.exception),
-            "Cannot divide Tabulation by given value"
-            )
+        self.assertEqual(str(context.exception),
+                         "Cannot divide Tabulation by given value")
 
         with self.assertRaises(ValueError) as context:
             tab1 /= np.array([])
-        self.assertEqual(
-            str(context.exception),
-            "Cannot divide Tabulation in-place by given value"
-            )
+        self.assertEqual(str(context.exception),
+                         "Cannot divide Tabulation in-place by given value")
 
         # LOCATE
 
-        for x in xlist:
-            self.assertEqual(tab.locate(x)[0], x)
-            self.assertEqual(len(tab.locate(x)), 1)
+        for x in xs:
+            self.assertEqual(tabs.locate(x)[0], x)
+            self.assertEqual(len(tabs.locate(x)), 1)
+
+        for x in xs[:-1]:
+            self.assertEqual(tabs.locate(x+x/10)[0], x+x/10)
+            self.assertEqual(len(tabs.locate(x+x/10)), 1)
+
+        for x in xr[2:-3]:
+            self.assertEqual(tabr.locate(x+x/10)[0], x+x/10)
+            self.assertEqual(len(tabr.locate(x+x/10)), 2)
+
+        self.assertEqual(tabr.locate(0.), [0, 11])
+        self.assertEqual(tabr.locate(4.5), [4.5, 10.55])
 
         # CLIP
 
-        clipped = resampled.clip(2, 5)
+        clipped = tabr.clip(2, 5)
         self.assertEqual(clipped.domain(), (2., 5.))
         self.assertEqual(clipped.integral(), 10.5)
 
-        clipped = resampled.clip(4.5, 5.5)
+        clipped = tabr.clip(4.5, 5.5)
         self.assertEqual(clipped.domain(), (4.5, 5.5))
         self.assertEqual(clipped.integral(), 5.)
 
         with self.assertRaises(ValueError) as context:
-            resampled.clip(-5, 10)
-        self.assertEqual(str(context.exception),
-                         "Clipping operation changed leading edge to ramp-style")
-        with self.assertRaises(ValueError) as context:
-            resampled.clip(2, 12)
-        self.assertEqual(str(context.exception),
-                         "Clipping operation changed trailing edge to ramp-style")
+            tabr.clip(15, 16)
+        self.assertEqual(str(context.exception), "Domains do not overlap")
 
-        ratio = tab / clipped
-        self.assertEqual(ratio.domain(), (4.5, 5.5))
-        self.assertEqual(ratio(4.49999), 0.)
-        self.assertEqual(ratio(4.5), 1.)
-        self.assertEqual(ratio(5.1), 1.)
-        self.assertEqual(ratio(5.5), 1.)
-        self.assertEqual(ratio(5.500001), 0.)
-
-        product = ratio * clipped
-        self.assertEqual(product.domain(), (4.5, 5.5))
-        self.assertEqual(product(4.49999), 0.)
-        self.assertEqual(product(4.5), 4.5)
-        self.assertEqual(product(5.1), 5.1)
-        self.assertEqual(product(5.5), 5.5)
-        self.assertEqual(product(5.500001), 0.)
-
-        # Test ramp/step checking
-        ramp1 = Tabulation(np.arange(5), np.arange(5))  # First y == 0
-        ramp2 = Tabulation(np.arange(5), np.arange(-4, 1))  # Last y == 0
-        _ = resampled * resampled
-
-        # CENTER
+        # X_MEAN
 
         boxcar = Tabulation((0., 10.), (1., 1.))
-        self.assertEqual(boxcar.mean(), 1.)
+        self.assertEqual(boxcar.x_mean(), 5.)
+
+        self.assertTrue(np.abs(boxcar.x_mean(0.33) - 5.) < 1e-10)
 
         # BANDWIDTH_RMS
+        self.assertTrue(np.abs(boxcar.bandwidth_rms() - 5.) < 1e-7)
+        self.assertTrue(np.abs(boxcar.bandwidth_rms(0.001) - 5. / np.sqrt(3.)) < 1e-7)
 
-        value = 5. / np.sqrt(3.)
-        eps = 1.e-7
-        self.assertTrue(np.abs(boxcar.bandwidth_rms() - value) < eps)
+        boxcar = Tabulation((10000, 10010),(1, 1))
+        self.assertEqual(boxcar.x_mean(), 10005.)
 
         # PIVOT_MEAN
 
-        # For narrow functions, the pivot_mean and the mean are similar
-        eps = 1.e-3
-        self.assertTrue(np.abs(boxcar.pivot_mean(1.e-6) - 1.) < eps)
+        # For narrow functions, the pivot_mean and the x_mean are similar
+        self.assertTrue(np.abs(boxcar.pivot_mean(1.e-6) - 10005.) < 1e-3)
 
         # For broad functions, values differ
         boxcar = Tabulation((1, 100), (1, 1))
-        value = 99. / np.log(100.)
-        eps = 1.e-3
-        self.assertTrue(np.abs(boxcar.pivot_mean(1.e-6) - value) < eps)
+        self.assertTrue(np.abs(boxcar.pivot_mean(1.e-6) - 99. / np.log(100.)) < 1e-3)
 
         # FWHM
 
@@ -455,7 +453,7 @@ class Test_Tabulation(unittest.TestCase):
         # SQUARE_WIDTH
 
         self.assertEqual(triangle.square_width(), 10.)
-        self.assertEqual(boxcar.square_width(), 10.)
+        self.assertEqual(boxcar.square_width(), 99.)
 
         # INITIALIZATION ERRORS
 
@@ -479,16 +477,14 @@ class Test_Tabulation(unittest.TestCase):
         y = np.array([4, 5, 6])
         with self.assertRaises(ValueError) as context:
             Tabulation(x, y)
-        self.assertEqual(
-            str(context.exception), "x-coordinates are not monotonic")
+        self.assertEqual(str(context.exception), "x-coordinates are not monotonic")
 
         # Test initialization with a non-monotonic x array (with floats)
         x = np.array([1., 3., 2.])  # Non-monotonic
         y = np.array([4., 5., 6.])
         with self.assertRaises(ValueError) as context:
             Tabulation(x, y)
-        self.assertEqual(
-            str(context.exception), "x-coordinates are not monotonic")
+        self.assertEqual(str(context.exception), "x-coordinates are not monotonic")
 
         # Test update with new_y having a different size than x
         x = np.array([1, 2, 3])
@@ -497,38 +493,19 @@ class Test_Tabulation(unittest.TestCase):
         new_y = np.array([7, 8])  # Mismatched size
         with self.assertRaises(ValueError) as context:
             tab._update_y(new_y)
-        self.assertEqual(
-            str(context.exception),
-            "x and y arrays do not have the same size"
-            )
+        self.assertEqual(str(context.exception),
+                         "x and y arrays do not have the same size")
 
         # Test xmerge with non-overlapping domains
         x1 = np.array([1, 2, 3])
         x2 = np.array([4, 5, 6])
         with self.assertRaises(ValueError) as context:
-            result = Tabulation._xmerge(x1, x2)
-        self.assertEqual(str(context.exception), "domains do not overlap")
+            Tabulation._xmerge(x1, x2)
+        self.assertEqual(str(context.exception), "Domains do not overlap")
 
         # Test xmerge with non-overlapping domains (with floats)
         x1 = np.array([1., 2., 3.])
         x2 = np.array([4., 5., 6.])
         with self.assertRaises(ValueError) as context:
-            result = Tabulation._xmerge(x1, x2)
-        self.assertEqual(str(context.exception), "domains do not overlap")
-
-        # resample where x=None
-        x = np.array([1, 2, 3])
-        y = np.array([4, 5, 6])
-
-        tab = Tabulation(x, y)
-
-        resampled = tab.resample(None)
-
-        self.assertTrue(np.all(resampled.x == x))
-        self.assertTrue(np.all(resampled.y == y))
-
-        # bandwidth_rms with dx=None
-        # boxcar = Tabulation((0., 10.), (1., 1.))
-        # value = 5
-
-        # self.assertTrue(np.abs(boxcar.bandwidth_rms() - value) == 0.)
+            Tabulation._xmerge(x1, x2)
+        self.assertEqual(str(context.exception), "Domains do not overlap")
