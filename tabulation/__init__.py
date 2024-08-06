@@ -137,8 +137,7 @@ class Tabulation(object):
         return self
 
     def _trim(self):
-        """
-        Update a Tabulation in place by deleting leading/trailing zero-valued regions.
+        """Update a Tabulation in place by deleting leading/trailing zero-valued regions.
 
         Notes:
             This will create a copy of the x and y coordinates if trimming is necessary,
@@ -225,6 +224,29 @@ class Tabulation(object):
 
     @staticmethod
     def _add_ramps_as_necessary(t1, t2):
+        """Create new Tabulations as necessary to provide leading/trailing ramps.
+
+        Given two Tabulations, either of which might have a "step" on the leading or
+        trailing edge, this function looks at the overlap and adds a microstep if
+        necessary to continue to have a step after the Tabulation domains are merged.
+
+        For example, if t1 has x=(5, 7) and y=(1, 1), it has a step at 5 and another step
+        at 7. If t2 has x=(4, 5, 6, 7) and y=(0, 1, 1, 0), it has a ramp from 4 to 5 and
+        a ramp at 6 to 7. If we try to perform a mathematical operation that combines
+        these two Tabulations in some way, t1's step will be changed, incorrectly, to
+        a ramp unless a step is forced. We force a step by adding x coordinates at
+        the smallest possible increments before or after the step edges, essentially
+        creating an infinitesimally-wide ramp. In this case we would create a new
+        t1 where x=(5-eps, 5, 7) and y=(0, 1, 1).
+
+        Parameters:
+            t1 (Tabulation): The first Tabulation
+            t2 (Tabulation): The second Tabulation
+
+        Returns:
+            Tabulation, Tabulation: The new Tabulations, if needed, or the original
+            Tabulations if not.
+        """
         x1 = t1.x
         y1 = t1.y
         x2 = t2.x
@@ -732,7 +754,7 @@ class Tabulation(object):
 
         Parameters:
             precision (float, optional): The step size at which to resample the
-                Tabulation.
+                Tabulation in log space.
 
         Returns:
             float: The pivot mean of the Tabulation.
