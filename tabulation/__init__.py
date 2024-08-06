@@ -17,6 +17,11 @@ import numpy as np
 from scipy.interpolate import interp1d
 
 try:
+    from math import nextafter  # Only in Python 3.9 and later
+except ImportError:  # pragma: no cover
+    from numpy import nextafter
+
+try:
     from ._version import __version__
 except ImportError:  # pragma: no cover
     __version__ = 'Version unspecified'
@@ -254,22 +259,22 @@ class Tabulation(object):
 
         if t1.y[0] != 0 and t2.x[0] < t1.x[0]:
             # t1 leading is a step and t2 starts to the left, add a tiny ramp
-            eps_x = math.nextafter(t1.x[0], -math.inf)
+            eps_x = nextafter(t1.x[0], -math.inf)
             x1 = np.concatenate(([eps_x], x1))
             y1 = np.concatenate(([0.], y1))
         if t1.y[-1] != 0 and t2.x[-1] > t1.x[-1]:
             # t1 trailing is a step and t2 end to the right, add a tiny ramp
-            eps_x = math.nextafter(t1.x[-1], math.inf)
+            eps_x = nextafter(t1.x[-1], math.inf)
             x1 = np.concatenate((x1, [eps_x]))
             y1 = np.concatenate((y1, [0.]))
         if t2.y[0] != 0 and t1.x[0] < t2.x[0]:
             # t2 leading is a step and t1 starts to the left, add a tiny ramp
-            eps_x = math.nextafter(t2.x[0], -math.inf)
+            eps_x = nextafter(t2.x[0], -math.inf)
             x2 = np.concatenate(([eps_x], x2))
             y2 = np.concatenate(([0.], y2))
         if t2.y[-1] != 0 and t1.x[-1] > t2.x[-1]:
             # t2 trailing is a step and t1 end to the right, add a tiny ramp
-            eps_x = math.nextafter(t2.x[-1], math.inf)
+            eps_x = nextafter(t2.x[-1], math.inf)
             x2 = np.concatenate((x2, [eps_x]))
             y2 = np.concatenate((y2, [0.]))
 
@@ -686,8 +691,8 @@ class Tabulation(object):
         """Return the weighted center x coordinate of the Tabulation.
 
         Parameters:
-            dx (float, optional): The minimum, uniform step size to use when evaluating the
-                center position. If omitted, no resampling is performed.
+            dx (float, optional): The minimum, uniform step size to use when evaluating
+                the center position. If omitted, no resampling is performed.
 
         Returns:
             float: The x coordinate that corresponds to the weighted center of the
@@ -718,8 +723,8 @@ class Tabulation(object):
         This is the mean value of (y * (x - x_mean)**2)**(1/2).
 
         Parameters:
-            dx (float, optional): The minimum, uniform step size to use when evaluating the
-                center position. If omitted, no resampling is performed.
+            dx (float, optional): The minimum, uniform step size to use when evaluating
+                the center position. If omitted, no resampling is performed.
 
         Returns:
             float: The RMS width of the Tabulation.

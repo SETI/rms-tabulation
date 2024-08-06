@@ -418,7 +418,7 @@ class Test_Tabulation(unittest.TestCase):
         self.assertTrue(np.abs(boxcar.bandwidth_rms() - 5.) < 1e-7)
         self.assertTrue(np.abs(boxcar.bandwidth_rms(0.001) - 5. / np.sqrt(3.)) < 1e-7)
 
-        boxcar = Tabulation((10000, 10010),(1, 1))
+        boxcar = Tabulation((10000, 10010), (1, 1))
         self.assertEqual(boxcar.x_mean(), 10005.)
 
         # PIVOT_MEAN
