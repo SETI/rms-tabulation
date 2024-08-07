@@ -22,7 +22,7 @@ class Test_Tabulation(unittest.TestCase):
         # xr = [0, 1, 2, 3, 4, 5, 6, 7, 8]
         # yr = [0, 0, 0, 1, 2, 6, 1, 0, 0]
         xr = [-1., 0., 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12.]
-        yr = [0., 0., 1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 0., 0.]
+        yr = [0.,  0., 1., 2., 3., 4., 5., 6., 7., 8., 9., 10.,  0.,  0.]
 
         # Step-style edges
         xs = [1., 2., 3., 4., 5., 6., 7., 8., 9., 10.]
@@ -402,6 +402,27 @@ class Test_Tabulation(unittest.TestCase):
         clipped = tabr.clip(4.5, 5.5)
         self.assertEqual(clipped.domain(), (4.5, 5.5))
         self.assertEqual(clipped.integral(), 5.)
+
+        clipped = tabr.clip(0, 12)
+        self.assertEqual(clipped.domain(), (0, 11))
+        self.assertEqual(clipped(0), 0)
+        self.assertEqual(clipped(0.5), 0.5)
+        self.assertEqual(clipped(11), 0)
+
+        clipped = tabr.clip(-10, 20)
+        self.assertEqual(clipped.domain(), (0, 11))
+        self.assertEqual(clipped(0), 0)
+        self.assertEqual(clipped(0.5), 0.5)
+        self.assertEqual(clipped(11), 0)
+
+        clipped = tabr.clip(0.5, 10)
+        self.assertEqual(clipped.domain(), (0.5, 10))
+        self.assertEqual(clipped(0.4), 0)
+        self.assertEqual(clipped(0.5), 0.5)
+        self.assertEqual(clipped(0.6), 0.6)
+        self.assertEqual(clipped(10), 10)
+        self.assertEqual(clipped(10.1), 0)
+        self.assertEqual(clipped(11), 0)
 
         with self.assertRaises(ValueError) as context:
             tabr.clip(15, 16)
