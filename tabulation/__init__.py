@@ -30,11 +30,12 @@ except ImportError:  # pragma: no cover
 class Tabulation(object):
     """A class that represents a function by a sequence of linear interpolations.
 
+    Although optimized to model filter bandpasses and spectral flux, the class is
+    sufficiently general to be used in a wide range of applications.
+
     The interpolations are defined between points defined by arrays of x and y
-    coordinates. The function is treated as equal to zero outside the range of the x
-    coordinates, with a step at the provided leading and trailing x coordinates. Although
-    optimized to model filter bandpasses and spectral flux, the class is sufficiently
-    general to be used in a wide range of applications.
+    coordinates. The mathematical function is treated as equal to zero outside the domain
+    of the x coordinates, with a step at the provided leading and trailing x coordinates.
 
     In general, zero values (either supplied or computed) at either the leading or
     trailing ends are removed. However, if explicitly supplied, one leading and/or
@@ -47,19 +48,37 @@ class Tabulation(object):
         >>> t1([0,   1,   1.9, 2,   3,   3.9, 4,   5,   6])
         array([ 0.,  0.,  0., 10., 10., 10., 10.,  0.,  0.])
 
-        >>> t2 = Tabulation([0, 2, 4], [0, 10, 10])  # Ramp on leading edge
+        >>> t2 = Tabulation([0, 2, 4], [0, 5, 5])  # Ramp on leading edge
         >>> t2.domain()
         (0., 4.)
-        >>> t2([0,   1,   1.9,  2,   3,   3.9, 4,   5,   6])
-        array([ 0.,  5.,  9.5, 10., 10., 10., 10.,  0.,  0.])
+        >>> t2([0,    1,    1.9,  2,    3,    3.9,  4,    5,    6])
+        array([ 0.  , 2.5 , 4.75, 5.  , 5.  , 5.  , 5.  , 0.  , 0.  ])
 
     By default it is assumed that the function never has leading or trailing zeros beyond
     the single zero necessary to anchor the interpolation, and the Tabulation object will
     automatically trim any additional leading and/or trailing regions of the domain that
     have purely zero values.
 
-    When mathematical operations are performed on Tabulations, new x-coordinates are
-    added as necessary to keep the behavior of step functions. For example::
+    When mathematical operations are performed on Tabulations, new x-coordinates are added
+    as necessary to keep the behavior of step functions. For example::
+
+        >>> t1.x
+        array([2., 4.])
+        >>> t2.x
+        array([0., 2., 4.])
+        >>> (t1-t2).x
+        array([0., 2., 2., 4.])
+        >>> (t1-t2).y
+        array([ 0., -5.,  5.,  5.])
+
+    Note that the new x-coordinates are epsilon away from the adjacent x-coordinates,
+    essentially producing an infinitesimally narrow ramp to simulate the original step
+    function::
+
+        >>> (t1-t2).x[1]
+        np.float64(1.9999999999999998)
+        >>> (t1-t2).x[2]
+        np.float64(2.0)
     """
 
     def __init__(self, x, y):
@@ -696,7 +715,7 @@ class Tabulation(object):
 
         Returns:
             float: The x coordinate that corresponds to the weighted center of the
-                function.
+            function.
         """
 
         self._trim()

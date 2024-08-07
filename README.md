@@ -42,16 +42,21 @@ pip install rms-tabulation
 # Getting Started
 
 The `Tabulation` class models a mathematical function by a series of (*x*,*y*) points and
-performs linear interpolation between them. The function is assumed to be zero outside of
-the defined *x* domain. However, if provided, one zero-valued point at either the
-beginning and/or the end of the *x* domain is considered to be valid data so that the
-interpolation can be anchored. If there is no zero-valued point provided, a step function
-is assumed.
+performs linear interpolation between them. Although optimized to model filter bandpasses
+and spectral flux, the class is sufficiently general to be used in a wide range of
+applications.
+
+The mathematical function is treated as equal to zero outside the domain of the *x*
+coordinates, with a step at the provided leading and trailing *x* coordinates. In general,
+zero values (either supplied or computed) at either the leading or trailing ends are
+removed. However, if explicitly supplied, one leading and/or trailing zero value is
+considered significant because it anchors the interpolation of a ramp at the beginning or
+end of the domain.
 
 A variety of mathematical operations can be performed on `Tabulation` objects, including
-addition, subtracting, multiplication, division, integration, and finding the mean, FWHM,
-or square width. See the
-[module documentation](https://rms-.readthedocs.io/en/latest/module.html) for details.
+addition, subtraction, multiplication, division, integration, and finding the X mean,
+FWHM, and square width. See the [module
+documentation](https://rms-.readthedocs.io/en/latest/module.html) for details.
 
 Here are some examples to get you started:
 
@@ -60,30 +65,33 @@ Here are some examples to get you started:
 >>> t1 = Tabulation([2, 4], [10, 10])  # Leading&trailing step function
 >>> t1.domain()
 (2., 4.)
->>> t1([0,   1,   1.9, 2,   3,   3.9, 4,   5,   6])
-array([ 0.,  0.,  0., 10., 10., 10., 10.,  0.,  0.])
->>> t1.mean()
-10.0
+>>> r1 = t1([0,   1,   1.9, 2,   3,   3.9, 4,   5,   6])
+array([      0.,  0.,  0., 10., 10., 10., 10.,  0.,  0.])
+>>> t1.x_mean()
+3.0
+>>> t1.integral()
+20.0
 
->>> t2 = Tabulation([0, 2, 4], [0, 10, 10])  # Ramp on leading edge
+>>> t2 = Tabulation([0, 2, 4], [0, 5, 5])  # Ramp on leading edge
 >>> t2.domain()
 (0., 4.)
->>> t2([0,   1,   1.9,  2,   3,   3.9, 4,   5,   6])
-array([ 0.,  5.,  9.5, 10., 10., 10., 10.,  0.,  0.])
->>> t2.mean()
-7.5
+>>> r2 = t2([0,   1,   1.9,  2,   3,   3.9, 4,   5,   6])
+array([      0.,  5.,  9.5, 10., 10., 10., 10.,  0.,  0.])
+>>> t2.x_mean()
+2.6666666666666665
+>>> t2.integral()
+15.0
 
->>> t3 = Tabulation([1, 3, 5], [5, 10, 5])  # Another step function
->>> r1 = t1 - t3
->>> r1.domain()
-(1.0, 5.0)
->>> r1.x
-array([ 1.,   2.,   3.,   4.,   5.])  # Now includes all x points from both t1 and t3
->>> r1.y
-array([-5. ,  2.5,  0. ,  2.5, -5. ])
-
-
-
+>>> t3 = t1-t2
+>>> t3.domain()
+(0.0, 4.0)
+>>> r2-r1
+array([ 0.  ,  2.5 ,  4.75, -5.  , -5.  , -5.  , -5.  ,  0.  ,  0.  ])
+>>> t3([0,       1,   1.9,   2,     3,     3.9,   4,     5,     6])
+array([ 0.  ,  2.5 ,  4.75, -5.  , -5.  , -5.  , -5.  ,  0.  ,  0.  ])
+>>> t3.integral()
+5.000000000000001
+```
 
 # Contributing
 
