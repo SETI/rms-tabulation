@@ -470,6 +470,14 @@ class Test_Tabulation(unittest.TestCase):
             more_triangle.fwhm(0.5)
         self.assertEqual(str(context.exception),
                          "Tabulation does not cross fractional height twice")
+        with self.assertRaises(ValueError) as context:
+            more_triangle.fwhm(-0.0001)
+        self.assertEqual(str(context.exception),
+                         "fraction is outside the range 0-1")
+        with self.assertRaises(ValueError) as context:
+            more_triangle.fwhm(1.0001)
+        self.assertEqual(str(context.exception),
+                         "fraction is outside the range 0-1")
 
         # SQUARE_WIDTH
 

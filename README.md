@@ -56,9 +56,14 @@ end of the domain.
 A variety of mathematical operations can be performed on `Tabulation` objects, including
 addition, subtraction, multiplication, division, integration, and finding the X mean,
 FWHM, and square width. See the [module
-documentation](https://rms-.readthedocs.io/en/latest/module.html) for details.
+documentation](https://rms-tabulation.readthedocs.io/en/latest/module.html) for details.
 
 Here are some examples to get you started:
+
+        >>> t2 = Tabulation([0, 2, 4], [0, 5, 5])  # Ramp on leading edge
+        >>> t2.domain()
+        (0., 4.)
+        >>> t2([0,    1,    1.9,  2,    3,    3.9,  4,    5,    6])
 
 ```python
 >>> from tabulation import Tabulation
@@ -75,14 +80,14 @@ array([      0.,  0.,  0., 10., 10., 10., 10.,  0.,  0.])
 >>> t2 = Tabulation([0, 2, 4], [0, 5, 5])  # Ramp on leading edge
 >>> t2.domain()
 (0., 4.)
->>> r2 = t2([0,   1,   1.9,  2,   3,   3.9, 4,   5,   6])
-array([      0.,  5.,  9.5, 10., 10., 10., 10.,  0.,  0.])
+>>> r2 = t2([0,    1,  1.9, 2,  3,  3.9, 4,  5,  6])
+array([      0., 2.5, 4.75, 5., 5., 5. , 5., 0., 0.])
 >>> t2.x_mean()
 2.6666666666666665
 >>> t2.integral()
 15.0
 
->>> t3 = t1-t2
+>>> t3 = t2-t1
 >>> t3.domain()
 (0.0, 4.0)
 >>> r2-r1
@@ -90,21 +95,21 @@ array([ 0.  ,  2.5 ,  4.75, -5.  , -5.  , -5.  , -5.  ,  0.  ,  0.  ])
 >>> t3([0,       1,   1.9,   2,     3,     3.9,   4,     5,     6])
 array([ 0.  ,  2.5 ,  4.75, -5.  , -5.  , -5.  , -5.  ,  0.  ,  0.  ])
 >>> t3.integral()
-5.000000000000001
+-5.000000000000001
 ```
 
 # Contributing
 
 Information on contributing to this package can be found in the
-[Contributing Guide](https://github.com/SETI/rms-/blob/main/CONTRIBUTING.md).
+[Contributing Guide](https://github.com/SETI/rms-tabulation/blob/main/CONTRIBUTING.md).
 
 # Links
 
-- [Documentation](https://rms-.readthedocs.io)
-- [Repository](https://github.com/SETI/rms-)
-- [Issue tracker](https://github.com/SETI/rms-/issues)
-- [PyPi](https://pypi.org/project/rms-)
+- [Documentation](https://rms-tabulation.readthedocs.io)
+- [Repository](https://github.com/SETI/rms-tabulation)
+- [Issue tracker](https://github.com/SETI/rms-tabulation/issues)
+- [PyPi](https://pypi.org/project/rms-tabulation)
 
 # Licensing
 
-This code is licensed under the [Apache License v2.0](https://github.com/SETI/rms-/blob/main/LICENSE).
+This code is licensed under the [Apache License v2.0](https://github.com/SETI/rms-tabulation/blob/main/LICENSE).

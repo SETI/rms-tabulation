@@ -107,6 +107,10 @@ class Tabulation(object):
 
         Returns:
             Tabulation: The current Tabulation object mutated with the new arrays.
+
+        Raises:
+            ValueError: If the x and/or y arrays do not have the proper dimensions,
+            size, or monotinicity.
         """
 
         x = np.asarray(x, dtype=np.double)
@@ -146,6 +150,9 @@ class Tabulation(object):
 
         Returns:
             Tabulation: The current Tabulation object mutated with the new array.
+
+        Raises:
+            ValueError: If the x and y arrays do not have the same size.
         """
 
         y = np.asarray(new_y, dtype=np.double)
@@ -282,7 +289,7 @@ class Tabulation(object):
             x1 = np.concatenate(([eps_x], x1))
             y1 = np.concatenate(([0.], y1))
         if t1.y[-1] != 0 and t2.x[-1] > t1.x[-1]:
-            # t1 trailing is a step and t2 end to the right, add a tiny ramp
+            # t1 trailing is a step and t2 ends to the right, add a tiny ramp
             eps_x = nextafter(t1.x[-1], math.inf)
             x1 = np.concatenate((x1, [eps_x]))
             y1 = np.concatenate((y1, [0.]))
@@ -292,7 +299,7 @@ class Tabulation(object):
             x2 = np.concatenate(([eps_x], x2))
             y2 = np.concatenate(([0.], y2))
         if t2.y[-1] != 0 and t1.x[-1] > t2.x[-1]:
-            # t2 trailing is a step and t1 end to the right, add a tiny ramp
+            # t2 trailing is a step and t1 ends to the right, add a tiny ramp
             eps_x = nextafter(t2.x[-1], math.inf)
             x2 = np.concatenate((x2, [eps_x]))
             y2 = np.concatenate((y2, [0.]))
@@ -341,8 +348,8 @@ class Tabulation(object):
             Tabulation: The new Tabulation.
 
         Raises:
-            ValueError: If the domains of the two Tabulations do not overlap.
-            ValueError: If the Tabulation can not be multiplied by the given value.
+            ValueError: If the domains of the two Tabulations do not overlap, or if the
+            Tabulation can not be multiplied by the given value.
 
         Notes:
             The new domain is the intersection of the domains of the current Tabulation
@@ -369,11 +376,11 @@ class Tabulation(object):
             other (float): Scale the current Tabulation's y-coordinates uniformly by
                 dividing by the given value.
 
-        Raises:
-            ValueError: If the Tabulation can not be multiplied by the given value.
-
         Returns:
             Tabulation: The new Tabulation.
+
+        Raises:
+            ValueError: If the Tabulation can not be multiplied by the given value.
         """
 
         if np.shape(other) == ():
@@ -391,8 +398,8 @@ class Tabulation(object):
             Tabulation: The new Tabulation.
 
         Raises:
-            ValueError: If the domains of the two Tabulations do not overlap.
-            ValueError: If the Tabulation can not be added to the given value.
+            ValueError: If the domains of the two Tabulations do not overlap, or if the
+            Tabulation can not be added to the given value.
 
         Notes:
             The new domain is the union of the domains of the current Tabulation and the
@@ -420,8 +427,8 @@ class Tabulation(object):
             Tabulation: The new Tabulation.
 
         Raises:
-            ValueError: If the domains of the two Tabulations do not overlap.
-            ValueError: If the Tabulation can not be subtracted by the given value.
+            ValueError: If the domains of the two Tabulations do not overlap, or if the
+            Tabulation can not be subtracted by the given value.
 
         Notes:
             The new domain is the union of the domains of the current Tabulation and the
@@ -451,8 +458,8 @@ class Tabulation(object):
             Tabulation: The current Tabulation mutated with the new values.
 
         Raises:
-            ValueError: If the domains of the two Tabulations do not overlap.
-            ValueError: If the Tabulation can not be multiplied by the given value.
+            ValueError: If the domains of the two Tabulations do not overlap, or if the
+            Tabulation can not be multiplied by the given value.
 
         Notes:
             The new domain is the intersection of the domains of the current Tabulation
@@ -480,11 +487,11 @@ class Tabulation(object):
             other (float): Scale the current Tabulation's y-coordinates uniformly by
                 dividing by the given value.
 
-        Raises:
-            ValueError: If the Tabulation can not be divided by the given value.
-
         Returns:
             Tabulation: The current Tabulation mutated with the new values.
+
+        Raises:
+            ValueError: If the Tabulation can not be divided by the given value.
         """
 
         if np.shape(other) == ():
@@ -502,8 +509,8 @@ class Tabulation(object):
             Tabulation: The current Tabulation mutated with the new values.
 
         Raises:
-            ValueError: If the domains of the two Tabulations do not overlap.
-            ValueError: If the Tabulation can not be added to the given value.
+            ValueError: If the domains of the two Tabulations do not overlap, or if the
+            Tabulation can not be added to the given value.
 
         Notes:
             The new domain is the union of the domains of the current Tabulation and the
@@ -531,8 +538,8 @@ class Tabulation(object):
             Tabulation: The current Tabulation mutated with the new values.
 
         Raises:
-            ValueError: If the domains of the two Tabulations do not overlap.
-            ValueError: If the Tabulation can not be subtracted by the given value.
+            ValueError: If the domains of the two Tabulations do not overlap, or if the
+            Tabulation can not be subtracted by the given value.
 
         Notes:
             The new domain is the union of the domains of the current Tabulation and the
@@ -650,6 +657,9 @@ class Tabulation(object):
         Returns:
             Tabulation: A new Tabulation equivalent to the current Tabulation but sampled
             only at the given x-coordinates.
+
+        Raises:
+            ValueError: If the x coordinates are not monotonic.
 
         Notes:
             If the leading or trailing X coordinate corresponds to a non-zero value, then
@@ -810,7 +820,14 @@ class Tabulation(object):
 
         Returns:
             float: The FWHM for the given fractional height.
+
+        Raises:
+            ValueError: If the Tabulation does not cross the fractional height exactly
+            twice, or if the fraction is outside the range 0 to 1.
         """
+
+        if not 0 <= fraction <= 1:
+            raise ValueError("fraction is outside the range 0-1")
 
         max = np.max(self.y)
         limits = self.locate(max * fraction)
