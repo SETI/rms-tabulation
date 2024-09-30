@@ -110,7 +110,7 @@ class Tabulation(object):
 
         Raises:
             ValueError: If the x and/or y arrays do not have the proper dimensions,
-            size, or monotinicity.
+                size, or monotinicity.
         """
 
         x = np.asarray(x, dtype=np.double)
@@ -349,7 +349,7 @@ class Tabulation(object):
 
         Raises:
             ValueError: If the domains of the two Tabulations do not overlap, or if the
-            Tabulation can not be multiplied by the given value.
+                Tabulation can not be multiplied by the given value.
 
         Notes:
             The new domain is the intersection of the domains of the current Tabulation
@@ -399,7 +399,7 @@ class Tabulation(object):
 
         Raises:
             ValueError: If the domains of the two Tabulations do not overlap, or if the
-            Tabulation can not be added to the given value.
+                Tabulation can not be added to the given value.
 
         Notes:
             The new domain is the union of the domains of the current Tabulation and the
@@ -428,7 +428,7 @@ class Tabulation(object):
 
         Raises:
             ValueError: If the domains of the two Tabulations do not overlap, or if the
-            Tabulation can not be subtracted by the given value.
+                Tabulation can not be subtracted by the given value.
 
         Notes:
             The new domain is the union of the domains of the current Tabulation and the
@@ -459,7 +459,7 @@ class Tabulation(object):
 
         Raises:
             ValueError: If the domains of the two Tabulations do not overlap, or if the
-            Tabulation can not be multiplied by the given value.
+                Tabulation can not be multiplied by the given value.
 
         Notes:
             The new domain is the intersection of the domains of the current Tabulation
@@ -510,7 +510,7 @@ class Tabulation(object):
 
         Raises:
             ValueError: If the domains of the two Tabulations do not overlap, or if the
-            Tabulation can not be added to the given value.
+                Tabulation can not be added to the given value.
 
         Notes:
             The new domain is the union of the domains of the current Tabulation and the
@@ -539,7 +539,7 @@ class Tabulation(object):
 
         Raises:
             ValueError: If the domains of the two Tabulations do not overlap, or if the
-            Tabulation can not be subtracted by the given value.
+                Tabulation can not be subtracted by the given value.
 
         Notes:
             The new domain is the union of the domains of the current Tabulation and the
@@ -585,7 +585,7 @@ class Tabulation(object):
 
         Raises:
             ValueError: If the clip domain does not overlap with the Tabulation
-            domain.
+                domain.
         """
 
         new_x = Tabulation._xoverlap(self.x, np.array((xmin, xmax)))
@@ -823,7 +823,7 @@ class Tabulation(object):
 
         Raises:
             ValueError: If the Tabulation does not cross the fractional height exactly
-            twice, or if the fraction is outside the range 0 to 1.
+                twice, or if the fraction is outside the range 0 to 1.
         """
 
         if not 0 <= fraction <= 1:
