@@ -121,8 +121,8 @@ class Tabulation(object):
                 size, or monotinicity.
         """
 
-        x = np.asarray(x, dtype=np.float_)
-        y = np.asarray(y, dtype=np.float_)
+        x = np.asarray(x, dtype=np.float64)
+        y = np.asarray(y, dtype=np.float64)
 
         if len(x.shape) != 1:
             raise ValueError('x array is not 1-dimensional')
@@ -165,7 +165,7 @@ class Tabulation(object):
             ValueError: If the x and y arrays do not have the same size.
         """
 
-        y = np.asarray(new_y, dtype=np.float_)
+        y = np.asarray(new_y, dtype=np.float64)
 
         if y.shape != self.x.shape:
             raise ValueError('x and y arrays do not have the same size')
@@ -781,7 +781,7 @@ class Tabulation(object):
             # If new_x is None, return a copy of the current tabulation
             return Tabulation(self.x, self.y.copy())
 
-        new_x = np.asarray(new_x, dtype=np.float_)
+        new_x = np.asarray(new_x, dtype=np.float64)
 
         mask = new_x[:-1] < new_x[1:]
         if not np.all(mask):
