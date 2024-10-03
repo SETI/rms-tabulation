@@ -227,21 +227,21 @@ class Test_Tabulation(unittest.TestCase):
 
         with self.assertRaises(ValueError) as context:
             _ = tab1 + np.array([])
-        self.assertEqual(str(context.exception), "Cannot add Tabulation by given value")
+        self.assertEqual(str(context.exception), "cannot add Tabulation by given value")
 
         with self.assertRaises(ValueError) as context:
             _ = tab1 + 5
-        self.assertEqual(str(context.exception), "Cannot add Tabulation by given value")
+        self.assertEqual(str(context.exception), "cannot add Tabulation by given value")
 
         with self.assertRaises(ValueError) as context:
             tab1 += np.array([])
         self.assertEqual(str(context.exception),
-                         "Cannot add Tabulation in-place by given value")
+                         "cannot add Tabulation in-place by given value")
 
         with self.assertRaises(ValueError) as context:
             tab1 += 5
         self.assertEqual(str(context.exception),
-                         "Cannot add Tabulation in-place by given value")
+                         "cannot add Tabulation in-place by given value")
 
         # SUBTRACTION
 
@@ -285,22 +285,22 @@ class Test_Tabulation(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             _ = tab1 - np.array([])
         self.assertEqual(str(context.exception),
-                         "Cannot subtract Tabulation by given value")
+                         "cannot subtract Tabulation by given value")
 
         with self.assertRaises(ValueError) as context:
             _ = tab1 - 5
         self.assertEqual(str(context.exception),
-                         "Cannot subtract Tabulation by given value")
+                         "cannot subtract Tabulation by given value")
 
         with self.assertRaises(ValueError) as context:
             tab1 -= np.array([])
         self.assertEqual(str(context.exception),
-                         "Cannot subtract Tabulation in-place by given value")
+                         "cannot subtract Tabulation in-place by given value")
 
         with self.assertRaises(ValueError) as context:
             tab1 -= 5
         self.assertEqual(str(context.exception),
-                         "Cannot subtract Tabulation in-place by given value")
+                         "cannot subtract Tabulation in-place by given value")
 
         # MULTIPLICATION
 
@@ -350,12 +350,12 @@ class Test_Tabulation(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             _ = tab1 * np.array([])
         self.assertEqual(str(context.exception),
-                         "Cannot multiply Tabulation by given value")
+                         "cannot multiply Tabulation by given value")
 
         with self.assertRaises(ValueError) as context:
             tab1 *= np.array([])
         self.assertEqual(str(context.exception),
-                         "Cannot multiply Tabulation in-place by given value")
+                         "cannot multiply Tabulation in-place by given value")
 
         # DIVISION
 
@@ -369,12 +369,12 @@ class Test_Tabulation(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             _ = tab1 / np.array([])
         self.assertEqual(str(context.exception),
-                         "Cannot divide Tabulation by given value")
+                         "cannot divide Tabulation by given value")
 
         with self.assertRaises(ValueError) as context:
             tab1 /= np.array([])
         self.assertEqual(str(context.exception),
-                         "Cannot divide Tabulation in-place by given value")
+                         "cannot divide Tabulation in-place by given value")
 
         # LOCATE
 
@@ -426,7 +426,7 @@ class Test_Tabulation(unittest.TestCase):
 
         with self.assertRaises(ValueError) as context:
             tabr.clip(15, 16)
-        self.assertEqual(str(context.exception), "Domains do not overlap")
+        self.assertEqual(str(context.exception), "domains do not overlap")
 
         # X_MEAN
 
@@ -530,11 +530,76 @@ class Test_Tabulation(unittest.TestCase):
         x2 = np.array([4, 5, 6])
         with self.assertRaises(ValueError) as context:
             Tabulation._xmerge(x1, x2)
-        self.assertEqual(str(context.exception), "Domains do not overlap")
+        self.assertEqual(str(context.exception), "domains do not overlap")
 
         # Test xmerge with non-overlapping domains (with floats)
         x1 = np.array([1., 2., 3.])
         x2 = np.array([4., 5., 6.])
         with self.assertRaises(ValueError) as context:
             Tabulation._xmerge(x1, x2)
-        self.assertEqual(str(context.exception), "Domains do not overlap")
+        self.assertEqual(str(context.exception), "domains do not overlap")
+
+        # QUANTILE, INTEGRATE with limits
+
+        tab = Tabulation((0, 1), (0, 1))
+        self.assertEqual(tab.quantile(0), 0)
+        self.assertEqual(tab.quantile(1), 1)
+        self.assertEqual(tab.quantile(0.25), 0.5)
+        self.assertEqual(tab.quantile(0.0625), 0.25)
+        self.assertEqual(tab.quantile(0.5625), 0.75)
+
+        np.random.seed(3285)
+        xrandom = np.cumsum(np.random.rand(100))
+        yrandom = 0.1 * np.arange(100) + np.random.randn(100)
+        yrandom[yrandom < 0] = 0.
+        eps = 1.e-14
+        for tab in (Tabulation(np.arange(8), np.ones(8)),
+                    Tabulation(np.arange(9), np.ones(9)),
+                    Tabulation(np.arange(8), np.arange(8)),
+                    Tabulation(np.arange(9), np.arange(9)),
+                    Tabulation(xrandom, yrandom)):
+            integ = tab.integral()
+            for q in (0, 1, 0.5, 1./3, 1./7, 3/7., 6/7., 0.001, 0.999, np.sqrt(0.5)):
+                test1 = q * integ
+                test2 = tab.integral(tab.x[0], tab.quantile(q))
+                self.assertLessEqual(abs(test1 - test2), tab.x[-1] * eps)
+
+        self.assertRaises(ValueError, tab.quantile, -1.e99)
+        self.assertRaises(ValueError, tab.quantile, 1.0000000001)
+
+        # GETITEM, STR, REPR
+
+        tab = Tabulation(np.arange(9), np.arange(9))
+        self.assertEqual(tab[4], tab.y[4])
+        self.assertEqual(str(tab), 'Tabulation([0. 1. ... 7. 8.], [0. 1. ... 7. 8.])')
+        self.assertEqual(str(tab), repr(tab))
+
+        tab2 = tab[:4]
+        self.assertEqual(tab2.domain()[1], tab.y[3])
+        self.assertEqual(len(tab2), 4)
+        self.assertEqual(str(tab2), 'Tabulation([0. 1. 2. 3.], [0. 1. 2. 3.])')
+        self.assertEqual(str(tab2), repr(tab2))
+
+        tab3 = tab[[0, 1, 3, 5, 8]]
+        self.assertEqual(tab3.domain()[1], tab.y[8])
+        self.assertEqual(len(tab3), 5)
+        self.assertEqual(str(tab3), 'Tabulation([0. 1. ... 5. 8.], [0. 1. ... 5. 8.])')
+        self.assertEqual(str(tab3), repr(tab3))
+
+        tab4 = tab[1::2]
+        self.assertEqual(tab4.domain()[0], tab.y[1])
+        self.assertEqual(tab4.domain()[1], tab.y[7])
+        self.assertEqual(len(tab4), 4)
+        self.assertEqual(str(tab4), 'Tabulation([1. 3. 5. 7.], [1. 3. 5. 7.])')
+        self.assertEqual(str(tab4), repr(tab4))
+
+        tab5 = tab[np.array([True] + 7*[False] + [True])]
+        self.assertEqual(tab5.domain()[0], tab.y[0])
+        self.assertEqual(tab5.domain()[1], tab.y[-1])
+        self.assertEqual(len(tab5), 2)
+        self.assertEqual(str(tab5), 'Tabulation([0. 8.], [0. 8.])')
+        self.assertEqual(str(tab5), repr(tab5))
+
+        self.assertRaises(IndexError, tab.__getitem__, -99)
+        self.assertRaises(ValueError, tab.__getitem__, None)
+        self.assertRaises(ValueError, tab.__getitem__, [0, 1, 5, 4])
