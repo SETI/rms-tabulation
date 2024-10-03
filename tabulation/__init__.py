@@ -628,7 +628,7 @@ class Tabulation(object):
     def __len__(self):
         """Length of this Tabulation.
 
-        This definition supports the use of `len(tab)` to obtain the number of elements in a
+        This definition supports the use of `len(tab)` to obtain the number of elements in
         Tabulation `tab`.
 
         Returns:
@@ -818,7 +818,7 @@ class Tabulation(object):
 
         if new_x is None:
             # If new_x is None, return a copy of the current tabulation
-            return Tabulation(self.x, self.y.copy())
+            return Tabulation(self.x, self.y)
 
         new_x = Tabulation._xmerge(new_x, self.x)
         return Tabulation(new_x, self(new_x))
@@ -972,7 +972,7 @@ class Tabulation(object):
 
         y_dx_x2 = np.empty(len(self))
         y_dx_x2[0] = 0.
-        y_dx_x2[1:] = (self.y[:-1] + self.y[1:]) * np.diff(x)   # twice each step's area
+        y_dx_x2[1:] = (self.y[:-1] + self.y[1:]) * np.diff(self.x)  # 2x each step's area
 
         cum_y_dx_x2 = np.cumsum(y_dx_x2)
         integ = q * cum_y_dx_x2[-1]

@@ -463,13 +463,13 @@ class Test_Tabulation(unittest.TestCase):
         with self.assertRaises(ValueError) as context:
             less_triangle.fwhm(0.5)
         self.assertEqual(str(context.exception),
-                         "tabulation does not cross fractional height twice")
+                         "Tabulation does not cross fractional height twice")
 
         more_triangle = Tabulation((0, 10, 20, 30), (0, 1, 0, 1))
         with self.assertRaises(ValueError) as context:
             more_triangle.fwhm(0.5)
         self.assertEqual(str(context.exception),
-                         "tabulation does not cross fractional height twice")
+                         "Tabulation does not cross fractional height twice")
         with self.assertRaises(ValueError) as context:
             more_triangle.fwhm(-0.0001)
         self.assertEqual(str(context.exception),
@@ -541,7 +541,7 @@ class Test_Tabulation(unittest.TestCase):
 
         # QUANTILE, INTEGRATE with limits
 
-        tab = Tabulation((0,1), (0,1))
+        tab = Tabulation((0, 1), (0, 1))
         self.assertEqual(tab.quantile(0), 0)
         self.assertEqual(tab.quantile(1), 1)
         self.assertEqual(tab.quantile(0.25), 0.5)
@@ -553,10 +553,10 @@ class Test_Tabulation(unittest.TestCase):
         yrandom = 0.1 * np.arange(100) + np.random.randn(100)
         yrandom[yrandom < 0] = 0.
         eps = 1.e-14
-        for tab in (Tabulation(np.arange(8) + 1., np.ones(8)),
-                    Tabulation(np.arange(9) + 1., np.ones(9)),
-                    Tabulation(np.arange(8) + 1., np.arange(8)),
-                    Tabulation(np.arange(9) + 1., np.arange(9)),
+        for tab in (Tabulation(np.arange(8), np.ones(8)),
+                    Tabulation(np.arange(9), np.ones(9)),
+                    Tabulation(np.arange(8), np.arange(8)),
+                    Tabulation(np.arange(9), np.arange(9)),
                     Tabulation(xrandom, yrandom)):
             integ = tab.integral()
             for q in (0, 1, 0.5, 1./3, 1./7, 3/7., 6/7., 0.001, 0.999, np.sqrt(0.5)):
@@ -580,7 +580,7 @@ class Test_Tabulation(unittest.TestCase):
         self.assertEqual(str(tab2), 'Tabulation([0. 1. 2. 3.], [0. 1. 2. 3.])')
         self.assertEqual(str(tab2), repr(tab2))
 
-        tab3 = tab[[0,1,3,5,8]]
+        tab3 = tab[[0, 1, 3, 5, 8]]
         self.assertEqual(tab3.domain()[1], tab.y[8])
         self.assertEqual(len(tab3), 5)
         self.assertEqual(str(tab3), 'Tabulation([0. 1. ... 5. 8.], [0. 1. ... 5. 8.])')
@@ -602,5 +602,4 @@ class Test_Tabulation(unittest.TestCase):
 
         self.assertRaises(IndexError, tab.__getitem__, -99)
         self.assertRaises(ValueError, tab.__getitem__, None)
-        self.assertRaises(ValueError, tab.__getitem__, [0,1,5,4])
-
+        self.assertRaises(ValueError, tab.__getitem__, [0, 1, 5, 4])
