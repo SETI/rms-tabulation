@@ -8,6 +8,11 @@ import math
 import numpy as np
 import unittest
 
+try:
+    from math import nextafter  # Only in Python 3.9 and later
+except ImportError:  # pragma: no cover
+    from numpy import nextafter
+
 
 class Test_Tabulation(unittest.TestCase):
 
@@ -625,8 +630,8 @@ class Test_Tabulation(unittest.TestCase):
         self.assertEqual(tab.domain(), (3, 3))
         self.assertEqual(tab(3), 7)
         self.assertEqual(list(tab([2, 3, 4])), [0, 7, 0])
-        self.assertEqual(tab(math.nextafter(3., -math.inf)), 0.)
-        self.assertEqual(tab(math.nextafter(3.,  math.inf)), 0.)
+        self.assertEqual(tab(nextafter(3., -math.inf)), 0.)
+        self.assertEqual(tab(nextafter(3.,  math.inf)), 0.)
 
         # All zeros
 
@@ -659,7 +664,7 @@ class Test_Tabulation(unittest.TestCase):
 
         tab = Tabulation([0, 1, 1, 2], [2, 4, 1, 3])
         self.assertEqual(tab.x[1], 1)
-        self.assertEqual(tab.x[2], math.nextafter(1, np.inf))
+        self.assertEqual(tab.x[2], nextafter(1, np.inf))
         x = np.array([0.990, 0.995, 1, 1.005, 1.010])
         answer = np.array([3.98, 3.99, 4., 1.01, 1.02])
         diff = tab(x) - answer

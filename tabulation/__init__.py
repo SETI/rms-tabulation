@@ -168,9 +168,9 @@ class Tabulation(object):
 
             for i in dups:
                 if abs(y[i]) < abs(y[i+1]):
-                    x[i] = math.nextafter(x[i], -math.inf)
+                    x[i] = nextafter(x[i], -math.inf)
                 else:
-                    x[i+1] = math.nextafter(x[i], math.inf)
+                    x[i+1] = nextafter(x[i], math.inf)
 
         self.x = x
         self.y = y
@@ -659,13 +659,13 @@ class Tabulation(object):
         # Strip bounding x-values that are within 3 * epsilon of the adjacent x
         xmin = self.x[0]
         if self.y[0] == 0. and self.y[1] != 0.:
-            limit = math.nextafter(self.x[1], -math.inf, steps=3)
+            limit = nextafter(self.x[1], -math.inf, steps=3)
             if self.x[0] > limit:
                 xmin = self.x[1]
 
         xmax = self.x[-1]
         if self.y[-1] == 0. and self.y[-2] != 0.:
-            limit = math.nextafter(self.x[-2], math.inf, steps=3)
+            limit = nextafter(self.x[-2], math.inf, steps=3)
             if self.x[-1] < limit:
                 xmax = self.x[-2]
 
