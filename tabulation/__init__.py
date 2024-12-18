@@ -18,11 +18,18 @@ import numpy as np
 from scipy.interpolate import interp1d
 
 try:
-    from math import nextafter  # Only in Python 3.9 and later
-except ImportError:             # pragma: no cover
+    from math import nextafter as _nextafter    # Only in Python 3.9 and later
+except ImportError:                             # pragma: no cover
+    from numpy import nextafter as _nextafter
+
+# We use the `steps` option only implemented in Python 3.12. Sheesh. Here's a workaround.
+nextafter = _nextafter
+try:
+    x = nextafter(1, math.inf, steps=2)
+except TypeError:
     def nextafter(x, y, /, *, steps=1):
         for i in range(steps):
-            x = np.nextafter(x, y)
+            x = _nextafter(x, y)
         return x
 
 try:
