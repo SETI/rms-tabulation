@@ -26,7 +26,7 @@ except ImportError:                             # pragma: no cover
 nextafter = _nextafter
 try:
     x = nextafter(1, math.inf, steps=2)
-except TypeError:
+except TypeError:                               # pragma: no cover
     def nextafter(x, y, /, *, steps=1):
         for i in range(steps):
             x = _nextafter(x, y)
