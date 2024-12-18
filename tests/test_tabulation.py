@@ -2,8 +2,9 @@
 # UNIT TESTS
 ########################################
 
-from tabulation import Tabulation
+from tabulation import Tabulation, nextafter
 
+import math
 import numpy as np
 import unittest
 
@@ -158,6 +159,18 @@ class Test_Tabulation(unittest.TestCase):
                                          9., 10., 11.])))
         self.assertTrue(np.all(subsampled.y == np.array([0., 1., 2., 3., 4., 5., 6., 7.,
                                                          8., 9., 10., 0.])))
+
+        tab = Tabulation(np.arange(10.) + 0.25, [0, 0, 1, 1, 0, 1, 0, 1, 1, 2])
+        subsampled = tab.subsample(dx=1)
+        for i in range(2, 10):
+            self.assertIn(i, subsampled.x)
+
+        subsampled = tab.subsample(n=16)
+        for i in range(2, 9):
+            self.assertIn(i+0.75, subsampled.x)
+
+        subsampled = tab.subsample()
+        self.assertIs(subsampled, tab)
 
         # ADDITION
 
@@ -506,14 +519,16 @@ class Test_Tabulation(unittest.TestCase):
         y = np.array([4, 5, 6])
         with self.assertRaises(ValueError) as context:
             Tabulation(x, y)
-        self.assertEqual(str(context.exception), "x-coordinates are not monotonic")
+        self.assertEqual(str(context.exception),
+                         "x-coordinates are not strictly monotonic")
 
         # Test initialization with a non-monotonic x array (with floats)
         x = np.array([1., 3., 2.])  # Non-monotonic
         y = np.array([4., 5., 6.])
         with self.assertRaises(ValueError) as context:
             Tabulation(x, y)
-        self.assertEqual(str(context.exception), "x-coordinates are not monotonic")
+        self.assertEqual(str(context.exception),
+                         "x-coordinates are not strictly monotonic")
 
         # Test update with new_y having a different size than x
         x = np.array([1, 2, 3])
@@ -521,7 +536,7 @@ class Test_Tabulation(unittest.TestCase):
         tab = Tabulation(x, y)
         new_y = np.array([7, 8])  # Mismatched size
         with self.assertRaises(ValueError) as context:
-            tab._update_y(new_y)
+            tab._update(tab.x, new_y)
         self.assertEqual(str(context.exception),
                          "x and y arrays do not have the same size")
 
@@ -603,3 +618,53 @@ class Test_Tabulation(unittest.TestCase):
         self.assertRaises(IndexError, tab.__getitem__, -99)
         self.assertRaises(ValueError, tab.__getitem__, None)
         self.assertRaises(ValueError, tab.__getitem__, [0, 1, 5, 4])
+
+        # Delta function case
+
+        tab = Tabulation([3], [7])
+        self.assertEqual(tab.domain(), (3, 3))
+        self.assertEqual(tab(3), 7)
+        self.assertEqual(list(tab([2, 3, 4])), [0, 7, 0])
+        self.assertEqual(tab(nextafter(3., -math.inf)), 0.)
+        self.assertEqual(tab(nextafter(3.,  math.inf)), 0.)
+
+        # All zeros
+
+        tab = Tabulation(np.arange(10), np.zeros(10))
+        self.assertEqual(tab.domain(), (0, 9))
+        self.assertEqual(tab(3), 0)
+        self.assertEqual(tab(-3), 0)
+        self.assertEqual(list(tab([2, 3, 4])), [0, 0, 0])
+
+        # Duplicated end points
+
+        x = np.array([1., 1., 2., 3., 4., 4.])
+        y = np.array([0., 4., 3., 2., 1., 0.])
+        tab = Tabulation(x, y)
+        self.assertEqual(tab.domain(), (1, 4))
+        self.assertLess(tab.x[0], 1.)
+        self.assertGreater(tab.x[-1], 4.)
+
+        x = np.array([1., 1.1, 2., 3., 4., 4.])
+        y = np.array([0., 4., 3., 2., 1., 0.])
+        tab = Tabulation(x, y)
+        self.assertEqual(tab.domain(), (1, 4))
+
+        x = np.array([1., 1., 2., 3., 3.9, 4.])
+        y = np.array([0., 4., 3., 2., 1., 0.])
+        tab = Tabulation(x, y)
+        self.assertEqual(tab.domain(), (1, 4))
+
+        # Duplicated internal points
+
+        tab = Tabulation([0, 1, 1, 2], [2, 4, 1, 3])
+        self.assertEqual(tab.x[1], 1)
+        self.assertEqual(tab.x[2], nextafter(1, np.inf))
+        x = np.array([0.990, 0.995, 1, 1.005, 1.010])
+        answer = np.array([3.98, 3.99, 4., 1.01, 1.02])
+        diff = tab(x) - answer
+        self.assertLess(np.abs(diff).max(), 1.e-15)
+
+        # nextafter using steps
+        self.assertEqual(nextafter(1., 2., steps=1), 1.0000000000000002)
+        self.assertEqual(nextafter(1., 2., steps=2), 1.0000000000000004)

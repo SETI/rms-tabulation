@@ -18,9 +18,19 @@ import numpy as np
 from scipy.interpolate import interp1d
 
 try:
-    from math import nextafter  # Only in Python 3.9 and later
-except ImportError:  # pragma: no cover
-    from numpy import nextafter
+    from math import nextafter as _nextafter    # Only in Python 3.9 and later
+except ImportError:                             # pragma: no cover
+    from numpy import nextafter as _nextafter
+
+# We use the `steps` option only implemented in Python 3.12. Sheesh. Here's a workaround.
+nextafter = _nextafter
+try:
+    x = nextafter(1, math.inf, steps=2)
+except TypeError:                               # pragma: no cover
+    def nextafter(x, y, /, *, steps=1):
+        for i in range(steps):
+            x = _nextafter(x, y)
+        return x
 
 try:
     from ._version import __version__
@@ -85,9 +95,9 @@ class Tabulation(object):
     function::
 
         >>> (t1-t2).x[1]
-        np.float64(1.9999999999999998)
+        1.9999999999999998
         >>> (t1-t2).x[2]
-        np.float64(2.0)
+        2.0
     """
 
     def __init__(self, x, y):
@@ -118,11 +128,14 @@ class Tabulation(object):
 
         Raises:
             ValueError: If the x and/or y arrays do not have the proper dimensions,
-                size, or monotinicity.
+                size, or monotonicity.
         """
 
-        x = np.asarray(x, dtype=np.float64)
-        y = np.asarray(y, dtype=np.float64)
+        y = np.asarray(y, dtype=np.float64)     # makes a copy only if necessary
+
+        xx = np.asarray(x, dtype=np.float64)
+        copied = xx is not x
+        x = xx
 
         if len(x.shape) != 1:
             raise ValueError('x array is not 1-dimensional')
@@ -130,84 +143,51 @@ class Tabulation(object):
         if x.shape != y.shape:
             raise ValueError('x and y arrays do not have the same size')
 
-        if len(x) == 0:
-            x = np.array([0.])
-            y = np.array([0.])
+        if not x.size:
+            return self._update([0.], [0.])
 
-        mask = x[:-1] < x[1:]
-        if np.all(mask):
-            self.x = x
-            self.y = y
-        else:
-            mask = x[:-1] > x[1:]
+        # Swap X-coordinates to increasing
+        if x[0] > x[-1]:
+            x = x[::-1]
+            y = y[::-1]
+
+        # Trim...
+        nonzeros = np.where(y)[0]
+        if nonzeros.size:
+
+            # Slice out the endpoints and their adjacent zeros
+            first = nonzeros[0]
+            last = nonzeros[-1]
+            if first > 0:
+                first -= 1
+            if last < x.size - 1:
+                last += 1
+
+            x = x[first:last+1]
+            y = y[first:last+1]
+
+            # Make sure the sequence is monotonic but tolerate duplicates for now
+            mask = x[:-1] <= x[1:]
             if not np.all(mask):
-                raise ValueError('x-coordinates are not monotonic')
-            self.x = x[::-1]
-            self.y = y[::-1]
+                raise ValueError('x-coordinates are not strictly monotonic')
 
-        self._trim()
+            # Separate duplicated x by epsilon, shifting the one with y closer to zero
+            dups = np.where(x[:-1] == x[1:])[0]
+            if dups.size and not copied:  # make a copy so user's input array is unchanged
+                x = x.copy()
+
+            for i in dups:
+                if abs(y[i]) < abs(y[i+1]):
+                    x[i] = nextafter(x[i], -math.inf)
+                else:
+                    x[i+1] = nextafter(x[i], math.inf)
+
+        self.x = x
+        self.y = y
         self.x.flags.writeable = False
         self.y.flags.writeable = False
-
         self.func = None
         return self
-
-    def _update_y(self, new_y):
-        """Update a Tabulation in place with a new y array. Trim the result.
-
-        Parameters:
-            new_y (array-like): The new 1-D array of y-coordinates.
-
-        Returns:
-            Tabulation: The current Tabulation object mutated with the new array.
-
-        Raises:
-            ValueError: If the x and y arrays do not have the same size.
-        """
-
-        y = np.asarray(new_y, dtype=np.float64)
-
-        if y.shape != self.x.shape:
-            raise ValueError('x and y arrays do not have the same size')
-
-        self.y = y
-
-        self._trim()
-
-        self.func = None
-        return self
-
-    def _trim(self):
-        """Update a Tabulation in place by deleting leading/trailing zero-valued regions.
-
-        Notes:
-            This will create a copy of the x and y coordinates if trimming is necessary,
-            and return the original arrays if trimming is not necessary.
-        """
-
-        def _trim1(x, y):
-            """Strip away the leading end of an (x,y) array pair."""
-            if len(x) <= 2:  # 1 or 2 elements, nothing to trim
-                return (x, y)
-
-            # Define a mask at the low end
-            mask = np.cumsum(y != 0.) != 0
-
-            # Shift left by one to keep last zero
-            mask[:-1] = mask[1:]
-
-            if np.all(mask):
-                return (x, y)  # Don't make a copy if it's the same array
-            return (x[mask], y[mask])
-
-        # Trim the trailing end
-        (new_x, new_y) = _trim1(self.x[::-1], self.y[::-1])
-
-        # Trim the leading end
-        (new_x, new_y) = _trim1(new_x[::-1], new_y[::-1])
-
-        self.x = new_x
-        self.y = new_y
 
     @staticmethod
     def _xmerge(x1, x2):
@@ -288,6 +268,7 @@ class Tabulation(object):
             Tabulation, Tabulation: The new Tabulations, if needed, or the original
             Tabulations if not.
         """
+
         x1 = t1.x
         y1 = t1.y
         x2 = t2.x
@@ -339,15 +320,17 @@ class Tabulation(object):
             float or array-like: The value(s) of the interpolated y-coordinates at the
             given x(s).
         """
+
         # Fill in the 1-D interpolation if necessary
         if self.func is None:
             self.func = interp1d(self.x, self.y, kind='linear',
                                  bounds_error=False, fill_value=0.)
 
+        value = self.func(x)
         if np.shape(x):
-            return self.func(x)
+            return value
 
-        return float(self.func(x))
+        return float(value[()])
 
     def __mul__(self, other):
         """Multiply two Tabulations returning a new Tabulation.
@@ -495,7 +478,7 @@ class Tabulation(object):
             and the given Tabulation. Because the resulting Tabulation is only computed
             at the existing linear interpolation points, and the resulting Tabulation
             is also linearly interpolated, the values between interpolation points will
-            not be accurate (a quadratic interpolation would be required).
+            not be accurate. Note that you can use subsample() to improve precision.
         """
 
         if isinstance(other, Tabulation):
@@ -505,7 +488,7 @@ class Tabulation(object):
 
         # Otherwise just scale the y-values
         elif np.shape(other) == ():
-            return self._update_y(self.y * other)
+            return self._update(self.x, self.y * other)
 
         raise ValueError('cannot multiply Tabulation in-place by given value')
 
@@ -527,7 +510,7 @@ class Tabulation(object):
         """
 
         if np.shape(other) == ():
-            return self._update_y(self.y / other)
+            return self._update(self.x, self.y / other)
 
         raise ValueError('cannot divide Tabulation in-place by given value')
 
@@ -679,7 +662,24 @@ class Tabulation(object):
             tuple: A tuple (xmin, xmax).
         """
 
-        return (float(self.x[0]), float(self.x[-1]))
+        if self.x.size == 1:
+            x = float(self.x[0])
+            return (x, x)
+
+        # Strip bounding x-values that are within 3 * epsilon of the adjacent x
+        xmin = self.x[0]
+        if self.y[0] == 0. and self.y[1] != 0.:
+            limit = nextafter(self.x[1], -math.inf, steps=3)
+            if self.x[0] > limit:
+                xmin = self.x[1]
+
+        xmax = self.x[-1]
+        if self.y[-1] == 0. and self.y[-2] != 0.:
+            limit = nextafter(self.x[-2], math.inf, steps=3)
+            if self.x[-1] < limit:
+                xmax = self.x[-2]
+
+        return (float(xmin), float(xmax))
 
     def clip(self, xmin=None, xmax=None):
         """A Tabulation where the domain is (xmin, xmax).
@@ -797,28 +797,37 @@ class Tabulation(object):
 
         return Tabulation(new_x, self(new_x))
 
-    def subsample(self, new_x):
+    def subsample(self, new_x=None, *, dx=None, n=None):
         """A new Tabulation re-sampled at a list of x-coords plus existing ones.
 
         Parameters:
-            new_x (array-like): The new x-coordinates.
+            new_x (array-like, optional): The new x-coordinates.
+            dx (float, optional): If provided instead of `new_x`, an array of x-values
+                uniformly sampled by `dx` within this Tabulation's domain is used instead.
+                If `new_x` is specified, this input is ignored.
+            n (int, optional): If provided instead of new_x or dx, this is a number that
+                will be used to subdivide the domain, and a new x-value will be inserted
+                at each new point.
 
         Returns:
             Tabulation: A new Tabulation equivalent to the current Tabulation but sampled
             at both the existing x-coordinates and the given x-coordinates.
 
         Notes:
-            If the leading or trailing X coordinate corresponds to a non-zero value, then
-            there will be a step at that edge. If the leading or trailing X coordinate
-            corresponds to a zero value, then there will be a ramp at that edge. The
-            resulting Tabulation is trimmed such that the domain does not include any
-            zero-valued coordinates except for those necessary to anchor the leading or
-            trailing edge.
+            If none of new_x, dx, and x are specified, this Tabulation is returned.
         """
 
-        if new_x is None:
-            # If new_x is None, return a copy of the current tabulation
-            return Tabulation(self.x, self.y)
+        if new_x is not None:
+            pass
+        elif dx is not None:
+            xmin = dx * math.ceil(self.x[0] / dx)
+            new_x = np.arange(xmin, self.x[-1], dx)
+        elif n is not None:
+            (xmin, xmax) = self.domain()
+            dx = (xmax - xmin) / n
+            new_x = xmin + dx * np.arange(1, n)
+        else:
+            return self
 
         new_x = Tabulation._xmerge(new_x, self.x)
         return Tabulation(new_x, self(new_x))
@@ -834,8 +843,6 @@ class Tabulation(object):
             float: The x coordinate that corresponds to the weighted center of the
             function.
         """
-
-        self._trim()
 
         if dx is None:
             resampled = self
@@ -863,8 +870,6 @@ class Tabulation(object):
         Returns:
             float: The RMS width of the Tabulation.
         """
-
-        self._trim()
 
         if dx is None:
             resampled = self
@@ -896,7 +901,6 @@ class Tabulation(object):
             float: The pivot mean of the Tabulation.
         """
 
-        self._trim()
         (x0, x1) = self.domain()
 
         log_x0 = np.log(x0)
