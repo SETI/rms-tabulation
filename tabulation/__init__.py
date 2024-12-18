@@ -156,7 +156,7 @@ class Tabulation(object):
             x = x[first:last+1]
             y = y[first:last+1]
 
-            # Make sure the sequence is monotonic but tolerate duplicates fo rnow
+            # Make sure the sequence is monotonic but tolerate duplicates for now
             mask = x[:-1] <= x[1:]
             if not np.all(mask):
                 raise ValueError('x-coordinates are not strictly monotonic')
