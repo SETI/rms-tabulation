@@ -19,8 +19,11 @@ from scipy.interpolate import interp1d
 
 try:
     from math import nextafter  # Only in Python 3.9 and later
-except ImportError:  # pragma: no cover
-    from numpy import nextafter
+except ImportError:             # pragma: no cover
+    def nextafter(x, y, /, *, steps=1):
+        for i in range(steps):
+            x = np.nextafter(x, y)
+        return x
 
 try:
     from ._version import __version__
