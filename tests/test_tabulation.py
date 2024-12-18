@@ -2,16 +2,11 @@
 # UNIT TESTS
 ########################################
 
-from tabulation import Tabulation
+from tabulation import Tabulation, nextafter
 
 import math
 import numpy as np
 import unittest
-
-try:
-    from math import nextafter  # Only in Python 3.9 and later
-except ImportError:  # pragma: no cover
-    from numpy import nextafter
 
 
 class Test_Tabulation(unittest.TestCase):
@@ -669,3 +664,7 @@ class Test_Tabulation(unittest.TestCase):
         answer = np.array([3.98, 3.99, 4., 1.01, 1.02])
         diff = tab(x) - answer
         self.assertLess(np.abs(diff).max(), 1.e-15)
+
+        # nextafter using steps
+        self.assertEqual(nextafter(1., 2., steps=1), 1.0000000000000002)
+        self.assertEqual(nextafter(1., 2., steps=2), 1.0000000000000004)
