@@ -100,6 +100,8 @@ class Tabulation(object):
         2.0
     """
 
+    __array_priority__ = 1      # Enable "constant * Tabulation" operation to work
+
     def __init__(self, x, y):
         """Constructor for a Tabulation object.
 
@@ -111,6 +113,12 @@ class Tabulation(object):
         """
 
         self._update(x, y)
+
+    @property
+    def shape(self):
+        """The shape of this Tabulation as a tuple."""
+
+        return (self._length,)
 
     ########################################
     # Private methods
@@ -131,50 +139,93 @@ class Tabulation(object):
                 size, or monotonicity.
         """
 
-        y = np.asarray(y, dtype=np.float64)     # makes a copy only if necessary
-
-        xx = np.asarray(x, dtype=np.float64)
-        copied = xx is not x
+        xx = np.asarray(x, dtype=np.float64)    # makes a copy only if necessary
+        x_copied = xx is not x
         x = xx
 
-        if len(x.shape) != 1:
+        yy = np.asarray(y, dtype=np.float64)
+        y_copied = yy is not y
+        y = yy
+
+        if x.ndim != 1:
             raise ValueError('x array is not 1-dimensional')
 
         if x.shape != y.shape:
             raise ValueError('x and y arrays do not have the same size')
 
+        if not np.all(np.isfinite(x)):
+            raise ValueError('x array cannot contain NaNs or infinities')
+
+        if not np.all(np.isfinite(y)):
+            raise ValueError('y array cannot contain NaNs or infinities')
+
         if not x.size:
             return self._update([0.], [0.])
 
-        # Swap X-coordinates to increasing
+        # Swap x-coordinates to increasing
         if x[0] > x[-1]:
             x = x[::-1]
             y = y[::-1]
 
         # Trim...
+        x_before = []
+        y_before = []
+        x_after = []
+        y_after = []
+
         nonzeros = np.where(y)[0]
         if nonzeros.size:
 
             # Slice out the endpoints and their adjacent zeros
+            # Ignore "ramp" x-values, falling within 3 * epsilon of the adjacent x
             first = nonzeros[0]
-            last = nonzeros[-1]
-            if first > 0:
+            if first > 0 and x[first-1] < nextafter(x[first], -math.inf, steps=3):
                 first -= 1
-            if last < x.size - 1:
+            else:
+                x_before = [nextafter(x[first], -math.inf)]
+                y_before = [0.]
+
+            last = nonzeros[-1]
+            if last < x.size-1 and x[last+1] > nextafter(x[last], math.inf, steps=3):
                 last += 1
+            else:
+                x_after = [nextafter(x[last], math.inf)]
+                y_after = [0.]
 
             x = x[first:last+1]
             y = y[first:last+1]
 
-            # Make sure the sequence is monotonic but tolerate duplicates for now
-            mask = x[:-1] <= x[1:]
-            if not np.all(mask):
-                raise ValueError('x-coordinates are not strictly monotonic')
+            # Save the length and domain limits before dealing with new ramps
+            self._xmin = x[0]
+            self._xmax = x[-1]
+            self._length = x.size
 
-            # Separate duplicated x by epsilon, shifting the one with y closer to zero
-            dups = np.where(x[:-1] == x[1:])[0]
-            if dups.size and not copied:  # make a copy so user's input array is unchanged
+            # Insert the ramps as needed
+            if x_before or x_after:
+                x = np.concatenate((x_before, x, x_after))
+                y = np.concatenate((y_before, y, y_after))
+                x_copied = True
+                y_copied = True
+
+        else:
+            # If the values are all zero, retain original domain and sampling
+            self._xmin = x[0]
+            self._xmax = x[-1]
+            self._length = x.size
+            x_before = []
+
+        # Make sure the sequence is monotonic but tolerate duplicates for now. This is
+        # necessary because if x contains an infinitesimal step, an operation on x
+        # might result in a duplicate.
+        if not np.all(x[:-1] <= x[1:]):
+            raise ValueError('x-coordinates are not strictly monotonic')
+
+        # Separate duplicated x by epsilon, shifting the one with y closer to zero
+        dups = np.where(x[:-1] == x[1:])[0]
+        if dups.size:
+            if not x_copied:
                 x = x.copy()
+                x_copied = True
 
             for i in dups:
                 if abs(y[i]) < abs(y[i+1]):
@@ -182,11 +233,17 @@ class Tabulation(object):
                 else:
                     x[i+1] = nextafter(x[i], math.inf)
 
-        self.x = x
-        self.y = y
-        self.x.flags.writeable = False
-        self.y.flags.writeable = False
-        self.func = None
+        # Fill in the arrays, with _x and _y including the ramp endpoints
+        self._x = x if x_copied else x.copy()
+        self._y = y if y_copied else y.copy()
+        self._x.flags.writeable = False
+        self._y.flags.writeable = False
+
+        i0 = 1 if x_before else 0
+        self.x = self._x[i0:i0+self._length]
+        self.y = self._y[i0:i0+self._length]
+
+        self._func = None       # filled in if/when needed
         return self
 
     @staticmethod
@@ -199,33 +256,16 @@ class Tabulation(object):
 
         Returns:
             np.array: The merged array of x-coordinates.
-
-        Raises:
-            ValueError: If the domains do not overlap.
-
-        Notes:
-            The domains must have some overlap. The resulting domain will range from the
-            minimum of the two arrays to the maximum of the two arrays.
         """
 
-        # Confirm overlap
-        if x1[0] > x2[-1] or x2[0] > x1[-1]:
-            raise ValueError('domains do not overlap')
+        return np.sort(np.unique(np.hstack((x1, x2))))
 
-        # Merge and sort
-        sorted = np.sort(np.hstack((x1, x2)))
-
-        # Locate and remove duplicates
-        mask = np.append(sorted[:-1] != sorted[1:], True)
-        return sorted[mask]
-
-    @staticmethod
-    def _xoverlap(x1, x2):
-        """The union of x-coords that fall within the intersection of the domains.
+    def _xoverlap(self, other):
+        """The union of x-coords that fall within the intersection of two Tabulations.
 
         Parameters:
-            x1 (array-like): The first array of x-coordinates.
-            x2 (array-like): The second array of x-coordinates.
+            other (Tabulation or array-like): The second Tabulation or an array of
+                monotonically increasing x-coordinates.
 
         Returns:
             np.array: The merged array of x-coordinates, limited to those values that
@@ -233,74 +273,26 @@ class Tabulation(object):
 
         Raises:
             ValueError: If the domains do not overlap.
-
-        Notes:
-            The domains must have some overlap. The resulting domain will include only
-            the region where the two arrays intersect.
         """
 
-        new_x = Tabulation._xmerge(x1, x2)
-        mask = (new_x >= max(x1[0], x2[0])) & (new_x <= min(x1[-1], x2[-1]))
-        return new_x[mask]
+        if isinstance(other, Tabulation):
+            x2 = other._x
+            xmin = other._xmin
+            xmax = other._xmax
+        else:
+            x2 = other
+            xmin = x2[0]
+            xmax = x2[1]
 
-    @staticmethod
-    def _add_ramps_as_necessary(t1, t2):
-        """Create new Tabulations as necessary to provide leading/trailing ramps.
+        xmin = max(self._xmin, xmin)
+        xmax = min(self._xmax, xmax)
+        if xmin > xmax:
+            raise ValueError('domains do not overlap')
 
-        Given two Tabulations, either of which might have a "step" on the leading or
-        trailing edge, this function looks at the overlap and adds a microstep if
-        necessary to continue to have a step after the Tabulation domains are merged.
-
-        For example, if t1 has x=(5, 7) and y=(1, 1), it has a step at 5 and another step
-        at 7. If t2 has x=(4, 5, 6, 7) and y=(0, 1, 1, 0), it has a ramp from 4 to 5 and
-        a ramp at 6 to 7. If we try to perform a mathematical operation that combines
-        these two Tabulations in some way, t1's step will be changed, incorrectly, to
-        a ramp unless a step is forced. We force a step by adding x coordinates at
-        the smallest possible increments before or after the step edges, essentially
-        creating an infinitesimally-wide ramp. In this case we would create a new
-        t1 where x=(5-eps, 5, 7) and y=(0, 1, 1).
-
-        Parameters:
-            t1 (Tabulation): The first Tabulation
-            t2 (Tabulation): The second Tabulation
-
-        Returns:
-            Tabulation, Tabulation: The new Tabulations, if needed, or the original
-            Tabulations if not.
-        """
-
-        x1 = t1.x
-        y1 = t1.y
-        x2 = t2.x
-        y2 = t2.y
-
-        if t1.y[0] != 0 and t2.x[0] < t1.x[0]:
-            # t1 leading is a step and t2 starts to the left, add a tiny ramp
-            eps_x = nextafter(t1.x[0], -math.inf)
-            x1 = np.concatenate(([eps_x], x1))
-            y1 = np.concatenate(([0.], y1))
-        if t1.y[-1] != 0 and t2.x[-1] > t1.x[-1]:
-            # t1 trailing is a step and t2 ends to the right, add a tiny ramp
-            eps_x = nextafter(t1.x[-1], math.inf)
-            x1 = np.concatenate((x1, [eps_x]))
-            y1 = np.concatenate((y1, [0.]))
-        if t2.y[0] != 0 and t1.x[0] < t2.x[0]:
-            # t2 leading is a step and t1 starts to the left, add a tiny ramp
-            eps_x = nextafter(t2.x[0], -math.inf)
-            x2 = np.concatenate(([eps_x], x2))
-            y2 = np.concatenate(([0.], y2))
-        if t2.y[-1] != 0 and t1.x[-1] > t2.x[-1]:
-            # t2 trailing is a step and t1 ends to the right, add a tiny ramp
-            eps_x = nextafter(t2.x[-1], math.inf)
-            x2 = np.concatenate((x2, [eps_x]))
-            y2 = np.concatenate((y2, [0.]))
-
-        if x1 is not t1.x or y1 is not t1.y:
-            t1 = Tabulation(x1, y1)
-        if x2 is not t2.x or y2 is not t2.y:
-            t2 = Tabulation(x2, y2)
-
-        return t1, t2
+        x1 = self._x
+        x1 = x1[(x1 >= xmin) & (x1 <= xmax)]
+        x2 = x2[(x2 >= xmin) & (x2 <= xmax)]
+        return Tabulation._xmerge(x1, x2)
 
     ########################################
     # Standard operators
@@ -309,7 +301,7 @@ class Tabulation(object):
     def __call__(self, x):
         """The interpolated value corresponding to an x-coordinate.
 
-        This definition allows any Tabulation to be treated as a function. So if `tab` is
+        This definition allows any Tabulation to be treated as a function, so if `tab` is
         a Tabulation, `tab(x)` returns the value of that Tabulation evaluated at `x`.
 
         Parameters:
@@ -317,266 +309,278 @@ class Tabulation(object):
                 Tabulation.
 
         Returns:
-            float or array-like: The value(s) of the interpolated y-coordinates at the
-            given x(s).
+            float or array-like: The value(s) of the interpolated y-coordinate at the
+            given x-coordinate(s).
         """
 
         # Fill in the 1-D interpolation if necessary
-        if self.func is None:
-            self.func = interp1d(self.x, self.y, kind='linear',
-                                 bounds_error=False, fill_value=0.)
+        if self._func is None:
+            self._func = interp1d(self.x, self.y, kind='linear',
+                                  bounds_error=False, fill_value=0.)
 
-        value = self.func(x)
+        value = self._func(x)
         if np.shape(x):
             return value
 
         return float(value[()])
 
     def __mul__(self, other):
-        """Multiply two Tabulations returning a new Tabulation.
-
-        This definition allows a Tabulation to be multiplied by a constant or two
-        Tabulations to be multiplied together using the "`*`" operator, yielding a new
-        Tabulation.
+        """Multiply, supporting the "`*`" operator.
 
         Parameters:
-            other (Tabulation or float): If a Tabulation is given, multiply it with the
-                current Tabulation at each interpolation point. If a float is given,
-                scale the current Tabulation's y-coordinates uniformly.
+            other (Tabulation, float, or int): The multiplier.
 
         Returns:
             Tabulation: The new Tabulation.
 
         Raises:
-            ValueError: If the domains of the two Tabulations do not overlap, or if the
-                Tabulation can not be multiplied by the given value.
+            TypeError: If a Tabulation cannot be multiplied by an object of the given
+                type.
+            ValueError: If the domains of the two Tabulations do not overlap.
 
         Notes:
-            The new domain is the intersection of the domains of the current Tabulation
-            and the given Tabulation. Because the resulting Tabulation is only computed
-            at the existing linear interpolation points, and the resulting Tabulation
-            is also linearly interpolated, the values between interpolation points will
-            not be accurate (a quadratic interpolation would be required).
+            If `other` is a Tabulation, the new domain is the intersection of the domains
+            of the two Tabulations. Within this domain, the product is evaluated at the
+            union of the Tabulations' x-coordinates. Because interpolation is linear,
+            values between the new x-coordinates will have reduced accuracy; if this is a
+            concern, subsample one of the Tabulations first.
         """
 
         if isinstance(other, Tabulation):
-            new_x = Tabulation._xoverlap(self.x, other.x)
+            new_x = self._xoverlap(other)
             return Tabulation(new_x, self(new_x) * other(new_x))
 
-        # Otherwise just scale the y-values
-        elif np.shape(other) == ():
-            return Tabulation(self.x, self.y * other)
+        # Explicitly disallow multiplication by an array; this might work by accident
+        if isinstance(other, np.ndarray):
+            raise TypeError("unsupported operand type(s) for *: 'Tabulation' and "
+                            "'numpy.ndarray'")
 
-        raise ValueError('cannot multiply Tabulation by given value')
+        # Raises TypeError on incompatible type
+        return Tabulation(self._x, self._y * other)
 
-    def __truediv__(self, other):
-        """Divide two Tabulations returning a new Tabulation.
-
-        This definition allows a Tabulation to be divided by a constant using the "`/`"
-        operator, yielding a new Tabulation.
+    def __rmul__(self, other):
+        """Multiply, supporting the "`*`" operator if the Tabulation comes second.
 
         Parameters:
-            other (float): Scale the current Tabulation's y-coordinates uniformly by
-                dividing by the given value.
+            other (float or int): The multiplier.
 
         Returns:
             Tabulation: The new Tabulation.
 
         Raises:
-            ValueError: If the Tabulation can not be multiplied by the given value.
+            TypeError: If a Tabulation cannot be multiplied by an object of the given
+                type.
         """
 
-        if np.shape(other) == ():
-            return Tabulation(self.x, self.y / other)
-
-        raise ValueError('cannot divide Tabulation by given value')
-
-    def __add__(self, other):
-        """Add two Tabulations returning a new Tabulation.
-
-        This definition allows two Tabulations to be added together using a "`+`"
-        operator, yielding a new Tabulation.
-
-        Parameters:
-            other (Tabulation): The Tabulation to add to the current Tabulation.
-
-        Returns:
-            Tabulation: The new Tabulation.
-
-        Raises:
-            ValueError: If the domains of the two Tabulations do not overlap, or if the
-                Tabulation can not be added to the given value.
-
-        Notes:
-            The new domain is the union of the domains of the current Tabulation and the
-            given Tabulation. The resulting Tabulation will have x-coordinates that are
-            the union of the x-coordinates of the current Tabulation and the other
-            Tabulation. In addition, additional x-coordinates may be added as necessary to
-            ensure the proper behavior in the presence of Tabulations with non-zero
-            leading or trailing edges.
-        """
-
-        if isinstance(other, Tabulation):
-            t1, t2 = self._add_ramps_as_necessary(self, other)
-            new_x = Tabulation._xmerge(t1.x, t2.x)
-            return Tabulation(new_x, t1(new_x) + t2(new_x))
-
-        raise ValueError('cannot add Tabulation by given value')
-
-    def __sub__(self, other):
-        """Subtract two Tabulations returning a new Tabulation.
-
-        This definition allows two Tabulations to be subtracted using a "`-`" operator,
-        yielding a new Tabulation.
-
-        Parameters:
-            other (Tabulation): The Tabulation to subtract from the current Tabulation.
-
-        Returns:
-            Tabulation: The new Tabulation.
-
-        Raises:
-            ValueError: If the domains of the two Tabulations do not overlap, or if the
-                Tabulation can not be subtracted by the given value.
-
-        Notes:
-            The new domain is the union of the domains of the current Tabulation and the
-            given Tabulation. The resulting Tabulation will have x-coordinates that are
-            the union of the x-coordinates of the current Tabulation and the other
-            Tabulation. In addition, additional x-coordinates may be added as necessary to
-            ensure the proper behavior in the presence of Tabulations with non-zero
-            leading or trailing edges.
-        """
-
-        if isinstance(other, Tabulation):
-            t1, t2 = self._add_ramps_as_necessary(self, other)
-            new_x = Tabulation._xmerge(t1.x, t2.x)
-            return Tabulation(new_x, t1(new_x) - t2(new_x))
-
-        raise ValueError('cannot subtract Tabulation by given value')
+        return self.__mul__(other)
 
     def __imul__(self, other):
-        """Multiply two Tabulations in place.
-
-        This definition allows the in-place multiplication of a Tabulation by a constant
-        or another Tabulation using the "`*=`" operator.
+        """In-place multiply, supporting the "`*=`" operator.
 
         Parameters:
-            other (Tabulation or float): If a Tabulation is given, multiply it with the
-                current Tabulation at each interpolation point. If a float is given,
-                scale the y-coordinates uniformly.
+            other (Tabulation, float, or int): The multiplier.
 
         Returns:
-            Tabulation: The current Tabulation mutated with the new values.
+            Tabulation: The current Tabulation, mutated with the new values.
 
         Raises:
-            ValueError: If the domains of the two Tabulations do not overlap, or if the
-                Tabulation can not be multiplied by the given value.
+            TypeError: If the Tabulation cannot be multiplied by an object of the given
+                type.
+            ValueError: If the domains of the two Tabulations do not overlap.
 
         Notes:
-            The new domain is the intersection of the domains of the current Tabulation
-            and the given Tabulation. Because the resulting Tabulation is only computed
-            at the existing linear interpolation points, and the resulting Tabulation
-            is also linearly interpolated, the values between interpolation points will
-            not be accurate. Note that you can use subsample() to improve precision.
+            If `other` is a Tabulation, the new domain is the intersection of the domains
+            of the two Tabulations. Within this domain, the product is evaluated at the
+            union of the Tabulations' x-coordinates.
+
+            Because interpolation is linear, values between the new x-coordinates will
+            have reduced accuracy; if this is a concern, subsample one of the Tabulations
+            first.
         """
 
         if isinstance(other, Tabulation):
-            t1, t2 = self._add_ramps_as_necessary(self, other)
-            new_x = Tabulation._xoverlap(t1.x, t2.x)
-            return self._update(new_x, t1(new_x) * t2(new_x))
+            new_x = self._xoverlap(other)
+            return self._update(new_x, self(new_x) * other(new_x))
 
-        # Otherwise just scale the y-values
-        elif np.shape(other) == ():
-            return self._update(self.x, self.y * other)
+        # Explicitly disallow multiplication by an array; this might work by accident
+        if isinstance(other, np.ndarray):
+            raise TypeError("unsupported operand type(s) for *=: 'Tabulation' and "
+                            "'numpy.ndarray'")
 
-        raise ValueError('cannot multiply Tabulation in-place by given value')
+        # Raises TypeError on incompatible type
+        return self._update(self._x, self._y * other)
+
+    def _divide(self, other, op='/'):
+        """Internal function supporting "`/`" and "`/=`"."""
+
+        # Explicitly disallow division by an array; this might work by accident
+        if isinstance(other, np.ndarray):
+            raise TypeError(f"unsupported operand type(s) for {op}: 'Tabulation' and "
+                            "'numpy.ndarray'")
+
+        if isinstance(other, Tabulation):
+            domain = self.domain()
+            if other._x[0] > domain[0] or other._x[-1] < domain[1]:
+                raise ZeroDivisionError('domain of divisor does not span that of '
+                                        'dividend')
+            other = other.clip(*domain)
+            new_x = Tabulation._xmerge(self.x, other.x)
+            numer = self(new_x)
+            denom = other(new_x)
+        else:
+            new_x = self._x
+            numer = self._y
+            denom = other
+
+        if np.any(denom == 0.):
+            raise ZeroDivisionError('division by zero')
+
+        return (new_x, numer / denom)
+
+    def __truediv__(self, other):
+        """Divide, supporting the "`/`" operator.
+
+        Parameters:
+            other (Tabulation, float, or int): The divisor.
+
+        Returns:
+            Tabulation: The new Tabulation.
+
+        Raises:
+            TypeError: If a Tabulation cannot be divided by an object of the given type.
+            ZeroDivisionError: If the divisor contains zero or has a narrower domain than
+                this Tabulation.
+
+        Notes:
+            The returned Tabulation inherits its domain from the numerator. If `other` is
+            a Tabulation, its domain must span that of the numerator; otherwise, this is a
+            divide-by-zero operation. The ratio is evaluated at the union of the
+            Tabulations' x-coordinates within the new domain. Because interpolation is
+            linear, values between the new x-coordinates will have reduced accuracy; if
+            this is a concern, subsample one of the Tabulations first.
+        """
+
+        new_x, new_y = self._divide(other)
+        return Tabulation(new_x, new_y)
 
     def __itruediv__(self, other):
-        """Divide two Tabulations in place.
-
-        This definition allows the in-place division of a Tabulation by a constant,
-        using the "`/=`" operator.
+        """In-place divide, supporting the "`/=`" operator.
 
         Parameters:
-            other (float): Scale the current Tabulation's y-coordinates uniformly by
-                dividing by the given value.
+            other (float or int): The divisor.
 
         Returns:
-            Tabulation: The current Tabulation mutated with the new values.
+            Tabulation: The current Tabulation, mutated with the new values.
 
         Raises:
-            ValueError: If the Tabulation can not be divided by the given value.
+            TypeError: If a Tabulation cannot be divided by an object of the given type.
+            ZeroDivisionError: If the divisor contains zero or has a narrower domain than
+                this Tabulation.
+
+        Notes:
+            The returned Tabulation preserves has an unchanged domain. If `other` is a
+            Tabulation, its domain must span that of the given Tabulation; otherwise, this
+            is a divide-by-zero operation. The ratio is evaluated at the union of the
+            Tabulations' x-coordinates within the domain. Because interpolation is linear,
+            values between the new x-coordinates will have reduced accuracy; if this is a
+            concern, subsample one of the Tabulations first.
         """
 
-        if np.shape(other) == ():
-            return self._update(self.x, self.y / other)
+        new_x, new_y = self._divide(other, op='/=')
+        return self._update(new_x, new_y)
 
-        raise ValueError('cannot divide Tabulation in-place by given value')
+    def __add__(self, other):
+        """Add two Tabulations, supporting the "`+`" operator.
+
+        Parameters:
+            other (Tabulation): The Tabulation to add.
+
+        Returns:
+            Tabulation: The new Tabulation, sampled at the union of the x-coordinates of
+            both Tabulations.
+        """
+
+        if not isinstance(other, Tabulation):
+            raise TypeError("unsupported operand type(s) for +: 'Tabulation' and "
+                            f"'{type(other)}'")
+
+        new_x = Tabulation._xmerge(self._x, other._x)
+        return Tabulation(new_x, self(new_x) + other(new_x))
 
     def __iadd__(self, other):
-        """Add two Tabulations in place.
-
-        This definition allows the in-place addition of one Tabulation to another, using
-        the "`+=`" operator.
+        """In-place addition, supporting the "`+=`" operator.
 
         Parameters:
-            other (Tabulation): The Tabulation to add to the current Tabulation.
+            other (Tabulation): The Tabulation to add.
 
         Returns:
-            Tabulation: The current Tabulation mutated with the new values.
-
-        Raises:
-            ValueError: If the domains of the two Tabulations do not overlap, or if the
-                Tabulation can not be added to the given value.
-
-        Notes:
-            The new domain is the union of the domains of the current Tabulation and the
-            given Tabulation. The resulting Tabulation will have x-coordinates that are
-            the union of the x-coordinates of the current Tabulation and the other
-            Tabulation. In addition, additional x-coordinates may be added as necessary to
-            ensure the proper behavior in the presence of Tabulations with non-zero
-            leading or trailing edges.
+            Tabulation: The current Tabulation, mutated with the new values. It is sampled
+            at the union of the x-coordinates of both Tabulations.
         """
 
-        if isinstance(other, Tabulation):
-            t1, t2 = Tabulation._add_ramps_as_necessary(self, other)
-            new_x = Tabulation._xmerge(t1.x, t2.x)
-            return self._update(new_x, t1(new_x) + t2(new_x))
+        if not isinstance(other, Tabulation):
+            raise TypeError("unsupported operand type(s) for +=: 'Tabulation' and "
+                            f"'{type(other)}'")
 
-        raise ValueError('cannot add Tabulation in-place by given value')
+        new_x = Tabulation._xmerge(self._x, other._x)
+        return Tabulation(new_x, self(new_x) + other(new_x))
+
+    def __sub__(self, other):
+        """Subtract two Tabulations, supporting the "`-`" operator.
+
+        Parameters:
+            other (Tabulation): The Tabulation to subtract.
+
+        Returns:
+            Tabulation: The new Tabulation, sampled at the union of the x-coordinates of
+            both Tabulations.
+       """
+
+        if not isinstance(other, Tabulation):
+            raise TypeError("unsupported operand type(s) for -: 'Tabulation' and "
+                            f"'{type(other)}'")
+
+        new_x = Tabulation._xmerge(self._x, other._x)
+        return Tabulation(new_x, self(new_x) - other(new_x))
 
     def __isub__(self, other):
-        """Subtract two Tabulations in place.
-
-        This definition allows the in-place subtraction of one Tabulation from another,
-        using the "`-=`" operator.
+        """In-place addition, supporting the "`+=`" operator.
 
         Parameters:
-            other (Tabulation): The Tabulation to subtract from the current Tabulation.
+            other (Tabulation): The Tabulation to subtract.
 
         Returns:
             Tabulation: The current Tabulation mutated with the new values.
 
-        Raises:
-            ValueError: If the domains of the two Tabulations do not overlap, or if the
-                Tabulation can not be subtracted by the given value.
-
-        Notes:
-            The new domain is the union of the domains of the current Tabulation and the
-            given Tabulation. The resulting Tabulation will have x-coordinates that are
-            the union of the x-coordinates of the current Tabulation and the other
-            Tabulation. In addition, additional x-coordinates may be added as necessary to
-            ensure the proper behavior in the presence of Tabulations with non-zero
-            leading or trailing edges.
+        Returns:
+            Tabulation: The current Tabulation, mutated with new values. It is sampled at
+            the union of the x-coordinates of both Tabulations.
         """
 
-        if isinstance(other, Tabulation):
-            t1, t2 = Tabulation._add_ramps_as_necessary(self, other)
-            new_x = Tabulation._xmerge(t1.x, t2.x)
-            return self._update(new_x, t1(new_x) - t2(new_x))
+        if not isinstance(other, Tabulation):
+            raise TypeError("unsupported operand type(s) for -=: 'Tabulation' and "
+                            f"'{type(other)}'")
 
-        raise ValueError('cannot subtract Tabulation in-place by given value')
+        new_x = Tabulation._xmerge(self._x, other._x)
+        return Tabulation(new_x, self(new_x) - other(new_x))
+
+    def __eq__(self, other):
+        """True if two Tabulations are everywhere equal.
+
+        Parameters:
+            other (Tabulation): The Tabulation to compare.
+
+        Returns:
+            Tabulation: True if the Tabulations are equal.
+        """
+
+        if not isinstance(other, Tabulation):
+            return False
+
+        new_x = Tabulation._xmerge(self.x, other.x)
+        y1 = self(new_x)
+        y2 = other(new_x)
+        return np.all(y1 == y2)
 
     def __getitem__(self, indx):
         """An element or slice of this Tabulation using NumPy index notation.
@@ -618,7 +622,7 @@ class Tabulation(object):
             int: Number of elements in this Tabulation.
         """
 
-        return len(self.x)
+        return self._length
 
     def __str__(self):
         """Brief string representation of this Tabulation.
@@ -630,7 +634,7 @@ class Tabulation(object):
             str: Brief string representation of this Tabulation.
         """
 
-        if len(self.x) <= 4:
+        if self._length <= 4:
             return f'Tabulation({self.x}, {self.y})'
 
         xlo = str(self.x[:2])[:-1].strip()  # strip trailing "]"
@@ -662,24 +666,7 @@ class Tabulation(object):
             tuple: A tuple (xmin, xmax).
         """
 
-        if self.x.size == 1:
-            x = float(self.x[0])
-            return (x, x)
-
-        # Strip bounding x-values that are within 3 * epsilon of the adjacent x
-        xmin = self.x[0]
-        if self.y[0] == 0. and self.y[1] != 0.:
-            limit = nextafter(self.x[1], -math.inf, steps=3)
-            if self.x[0] > limit:
-                xmin = self.x[1]
-
-        xmax = self.x[-1]
-        if self.y[-1] == 0. and self.y[-2] != 0.:
-            limit = nextafter(self.x[-2], math.inf, steps=3)
-            if self.x[-1] < limit:
-                xmax = self.x[-2]
-
-        return (float(xmin), float(xmax))
+        return (float(self._xmin), float(self._xmax))
 
     def clip(self, xmin=None, xmax=None):
         """A Tabulation where the domain is (xmin, xmax).
@@ -702,12 +689,11 @@ class Tabulation(object):
         """
 
         if xmin is None:
-            xmin = self.x[0]
+            xmin = self._xmin
         if xmax is None:
-            xmax = self.x[-1]
-        new_x = Tabulation._xoverlap(self.x, np.array((xmin, xmax)))
-        mask = (new_x >= xmin) & (new_x <= xmax)
-        return self.resample(new_x[mask])
+            xmax = self._xmax
+        new_x = self._xoverlap(np.array((xmin, xmax)))
+        return self.resample(new_x)
 
     def locate(self, yvalue):
         """The x-coordinates where the Tabulation has the given value of y.
@@ -756,10 +742,10 @@ class Tabulation(object):
         return 0.5 * np.sum(ybar_x2 * dx)
 
     def resample(self, new_x):
-        """A new Tabulation re-sampled at a given list of x-coordinates.
+        """A new Tabulation re-sampled at the given x-coordinates.
 
         Parameters:
-            new_x (array-like): The new x-coordinates.
+            new_x (array-like): The new x-coordinates, which must be monotonic.
 
         Returns:
             Tabulation: A new Tabulation equivalent to the current Tabulation but sampled
@@ -779,10 +765,9 @@ class Tabulation(object):
 
         if new_x is None:
             # If new_x is None, return a copy of the current tabulation
-            return Tabulation(self.x, self.y.copy())
+            return Tabulation(self.x, self.y)
 
         new_x = np.asarray(new_x, dtype=np.float64)
-
         mask = new_x[:-1] < new_x[1:]
         if not np.all(mask):
             mask = new_x[:-1] > new_x[1:]
@@ -820,8 +805,8 @@ class Tabulation(object):
         if new_x is not None:
             pass
         elif dx is not None:
-            xmin = dx * math.ceil(self.x[0] / dx)
-            new_x = np.arange(xmin, self.x[-1], dx)
+            xmin = dx * math.ceil(self._xmin / dx)
+            new_x = np.arange(xmin, self._xmax, dx)
         elif n is not None:
             (xmin, xmax) = self.domain()
             dx = (xmax - xmin) / n
@@ -829,7 +814,7 @@ class Tabulation(object):
         else:
             return self
 
-        new_x = Tabulation._xmerge(new_x, self.x)
+        new_x = Tabulation._xmerge(new_x, self._x)
         return Tabulation(new_x, self(new_x))
 
     def x_mean(self, dx=None):
@@ -939,6 +924,7 @@ class Tabulation(object):
         limits = self.locate(max * fraction)
         if len(limits) != 2:
             raise ValueError('Tabulation does not cross fractional height twice')
+
         return float(limits[1] - limits[0])
 
     def square_width(self):
@@ -974,7 +960,7 @@ class Tabulation(object):
         if not 0 <= q <= 1:
             raise ValueError('q is outside the range 0-1')
 
-        y_dx_x2 = np.empty(len(self))
+        y_dx_x2 = np.empty(self._length)
         y_dx_x2[0] = 0.
         y_dx_x2[1:] = (self.y[:-1] + self.y[1:]) * np.diff(self.x)  # 2x each step's area
 
@@ -1010,3 +996,5 @@ class Tabulation(object):
                 t = 2*c / neg_b_discr
 
         return self.x[i] + t * (self.x[i+1] - self.x[i])
+
+##########################################################################################

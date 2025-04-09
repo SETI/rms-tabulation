@@ -149,10 +149,10 @@ class Test_Tabulation(unittest.TestCase):
 
         subsampled = tabs.subsample(np.array([0., 11.]))
         self.assertTrue(np.all(subsampled.x ==
-                               np.array([0., 1., 2., 3., 4., 5., 6., 7., 8.,
-                                         9., 10., 11.])))
-        self.assertTrue(np.all(subsampled.y == np.array([0., 1., 2., 3., 4., 5., 6., 7.,
-                                                         8., 9., 10., 0.])))
+                               np.array([1., 2., 3., 4., 5., 6., 7., 8.,
+                                         9., 10.])))
+        self.assertTrue(np.all(subsampled.y == np.array([1., 2., 3., 4., 5., 6., 7.,
+                                                         8., 9., 10.])))
         subsampled = tabr.subsample(np.array([0., 11.]))
         self.assertTrue(np.all(subsampled.x ==
                                np.array([0., 1., 2., 3., 4., 5., 6., 7., 8.,
@@ -238,23 +238,21 @@ class Test_Tabulation(unittest.TestCase):
         self.assertTrue(
             np.all(np.abs((tab1(off_xlist) + tab2(off_xlist)-tab5(off_xlist))) < 1e-10))
 
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(TypeError) as context:
             _ = tab1 + np.array([])
-        self.assertEqual(str(context.exception), "cannot add Tabulation by given value")
+        self.assertIn("unsupported operand type(s)", str(context.exception))
 
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(TypeError) as context:
             _ = tab1 + 5
-        self.assertEqual(str(context.exception), "cannot add Tabulation by given value")
+        self.assertIn("unsupported operand type(s)", str(context.exception))
 
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(TypeError) as context:
             tab1 += np.array([])
-        self.assertEqual(str(context.exception),
-                         "cannot add Tabulation in-place by given value")
+        self.assertIn("unsupported operand type(s)", str(context.exception))
 
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(TypeError) as context:
             tab1 += 5
-        self.assertEqual(str(context.exception),
-                         "cannot add Tabulation in-place by given value")
+        self.assertIn("unsupported operand type(s)", str(context.exception))
 
         # SUBTRACTION
 
@@ -295,25 +293,21 @@ class Test_Tabulation(unittest.TestCase):
         self.assertTrue(
             np.all(np.abs((tab1(off_xlist)-tab2(off_xlist)-tab5(off_xlist))) < 1e-10))
 
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(TypeError) as context:
             _ = tab1 - np.array([])
-        self.assertEqual(str(context.exception),
-                         "cannot subtract Tabulation by given value")
+        self.assertIn("unsupported operand type(s)", str(context.exception))
 
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(TypeError) as context:
             _ = tab1 - 5
-        self.assertEqual(str(context.exception),
-                         "cannot subtract Tabulation by given value")
+        self.assertIn("unsupported operand type(s)", str(context.exception))
 
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(TypeError) as context:
             tab1 -= np.array([])
-        self.assertEqual(str(context.exception),
-                         "cannot subtract Tabulation in-place by given value")
+        self.assertIn("unsupported operand type(s)", str(context.exception))
 
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(TypeError) as context:
             tab1 -= 5
-        self.assertEqual(str(context.exception),
-                         "cannot subtract Tabulation in-place by given value")
+        self.assertIn("unsupported operand type(s)", str(context.exception))
 
         # MULTIPLICATION
 
@@ -360,15 +354,13 @@ class Test_Tabulation(unittest.TestCase):
         tab5 *= 10
         self.assertTrue(np.all(np.abs((tab1(off_xlist)*10-tab5(off_xlist))) < 1e-10))
 
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(TypeError) as context:
             _ = tab1 * np.array([])
-        self.assertEqual(str(context.exception),
-                         "cannot multiply Tabulation by given value")
+        self.assertIn("unsupported operand type(s)", str(context.exception))
 
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(TypeError) as context:
             tab1 *= np.array([])
-        self.assertEqual(str(context.exception),
-                         "cannot multiply Tabulation in-place by given value")
+        self.assertIn("unsupported operand type(s)", str(context.exception))
 
         # DIVISION
 
@@ -379,15 +371,13 @@ class Test_Tabulation(unittest.TestCase):
         tab5 /= 10
         self.assertTrue(np.all(np.abs((tab1(off_xlist)/10 - tab5(off_xlist))) < 1e-10))
 
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(TypeError) as context:
             _ = tab1 / np.array([])
-        self.assertEqual(str(context.exception),
-                         "cannot divide Tabulation by given value")
+        self.assertIn("unsupported operand type(s)", str(context.exception))
 
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(TypeError) as context:
             tab1 /= np.array([])
-        self.assertEqual(str(context.exception),
-                         "cannot divide Tabulation in-place by given value")
+        self.assertIn("unsupported operand type(s)", str(context.exception))
 
         # LOCATE
 
@@ -543,16 +533,18 @@ class Test_Tabulation(unittest.TestCase):
         # Test xmerge with non-overlapping domains
         x1 = np.array([1, 2, 3])
         x2 = np.array([4, 5, 6])
-        with self.assertRaises(ValueError) as context:
-            Tabulation._xmerge(x1, x2)
-        self.assertEqual(str(context.exception), "domains do not overlap")
+#         with self.assertRaises(ValueError) as context:
+#             Tabulation._xmerge(x1, x2)
+#         self.assertEqual(str(context.exception), "domains do not overlap")
+        self.assertTrue(np.all(np.arange(1,7) - Tabulation._xmerge(x1, x2) == 0))
 
         # Test xmerge with non-overlapping domains (with floats)
         x1 = np.array([1., 2., 3.])
         x2 = np.array([4., 5., 6.])
-        with self.assertRaises(ValueError) as context:
-            Tabulation._xmerge(x1, x2)
-        self.assertEqual(str(context.exception), "domains do not overlap")
+#         with self.assertRaises(ValueError) as context:
+#             Tabulation._xmerge(x1, x2)
+#         self.assertEqual(str(context.exception), "domains do not overlap")
+        self.assertTrue(np.all(np.arange(1,7) - Tabulation._xmerge(x1, x2) == 0))
 
         # QUANTILE, INTEGRATE with limits
 
@@ -642,8 +634,8 @@ class Test_Tabulation(unittest.TestCase):
         y = np.array([0., 4., 3., 2., 1., 0.])
         tab = Tabulation(x, y)
         self.assertEqual(tab.domain(), (1, 4))
-        self.assertLess(tab.x[0], 1.)
-        self.assertGreater(tab.x[-1], 4.)
+        self.assertLess(tab._x[0], 1.)
+        self.assertGreater(tab._x[-1], 4.)
 
         x = np.array([1., 1.1, 2., 3., 4., 4.])
         y = np.array([0., 4., 3., 2., 1., 0.])
@@ -668,3 +660,83 @@ class Test_Tabulation(unittest.TestCase):
         # nextafter using steps
         self.assertEqual(nextafter(1., 2., steps=1), 1.0000000000000002)
         self.assertEqual(nextafter(1., 2., steps=2), 1.0000000000000004)
+
+        # New stuff 4/9/25
+        tab = Tabulation([0, 1, 1, 2], [2, 4, 1, 3])
+        self.assertEqual(tab.shape, (4,))
+
+        self.assertRaises(ValueError, Tabulation, [0., 1., 2., np.nan], np.arange(4))
+
+        with self.assertRaises(ValueError) as context:
+            t = Tabulation([0., 1., 2., np.nan], np.arange(4))
+        self.assertIn('NaNs', str(context.exception))
+
+        with self.assertRaises(ValueError) as context:
+            t = Tabulation([0., 1., 2., np.inf], np.arange(4))
+        self.assertIn('infinities', str(context.exception))
+
+        with self.assertRaises(ValueError) as context:
+            t = Tabulation(np.arange(4), [0., 1., 2., np.nan])
+        self.assertIn('NaNs', str(context.exception))
+
+        with self.assertRaises(ValueError) as context:
+            t = Tabulation(np.arange(4), [0., 1., 2., np.inf])
+        self.assertIn('infinities', str(context.exception))
+
+        tab = Tabulation([0, 1, 1, 2], [2, 4, 1, 3])
+        tab2 = 2 * tab
+        self.assertEqual(list(tab2.y), [4, 8, 2, 6])
+
+        tab = Tabulation([0, 1, 1, 2], [2, 1, 4, 3])
+        tab2 = 2 * tab
+        self.assertEqual(list(tab2.y), [4, 2, 8, 6])
+
+        ratio = tab2 / tab
+        self.assertEqual(list(ratio.y), [2, 2, 2, 2])
+
+        tab3 = Tabulation([0.1, 4], [1, 1])
+        self.assertRaises(ZeroDivisionError, tab.__truediv__, tab3)
+
+        numer = Tabulation(np.arange(10), np.arange(10))
+        denom = Tabulation(np.arange(10), np.arange(10))
+        self.assertRaises(ZeroDivisionError, numer.__truediv__, denom)
+
+        self.assertRaises(ZeroDivisionError, numer.__truediv__, 0.)
+
+        self.assertRaises(TypeError, numer.__truediv__, np.arange(10))
+        self.assertRaises(TypeError, numer.__truediv__, 'abc')
+
+        tab = Tabulation(np.array([0., 1., 1., 2.]), np.array([0., 4., 1., 0.]))
+        self.assertEqual(list(tab._y), [0, 4, 1, 0])
+
+        tab = Tabulation(np.array([0., 1., 1., 2.]), np.array([2., 4., 1., 0.]))
+        self.assertEqual(list(tab._y), [0, 2, 4, 1, 0])
+
+        tab = Tabulation(np.array([0., 1., 1., 2.]), np.array([2., 4., 1., 5.]))
+        self.assertEqual(list(tab._y), [0, 2, 4, 1, 5, 0])
+
+        # Add with non-overlapping domains should work now
+        tab1 = Tabulation(np.arange(4), [2,5,3,4])
+        tab2 = Tabulation(np.arange(5,9), [6,3,4,2])
+        tsum = tab1 + tab2
+        self.assertEqual(tsum.domain(), (0, 8))
+        self.assertEqual(tsum(-1.e-9), 0.)
+        self.assertEqual(tsum(3), 4.)
+        self.assertEqual(tsum(3.000000001), 0.)
+        self.assertEqual(tsum(4.999999999), 0.)
+        self.assertEqual(tsum(5), 6.)
+        self.assertEqual(tsum(8), 2.)
+        self.assertEqual(tsum(8.000000001), 0.)
+
+        self.assertRaises(ValueError, tab1.__mul__, tab2)
+
+        # __eq__
+        tab1 = Tabulation(np.arange(10), np.arange(10))
+        tab2 = Tabulation([0,9], [0,9])
+        self.assertEqual(tab1, tab2)
+        self.assertTrue(tab1 == tab2)
+        self.assertFalse(tab1 != tab2)
+
+        self.assertFalse(tab1 == 'abc')
+        self.assertFalse(tab1 == 5)
+
