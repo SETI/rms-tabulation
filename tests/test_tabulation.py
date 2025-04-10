@@ -536,7 +536,7 @@ class Test_Tabulation(unittest.TestCase):
 #         with self.assertRaises(ValueError) as context:
 #             Tabulation._xmerge(x1, x2)
 #         self.assertEqual(str(context.exception), "domains do not overlap")
-        self.assertTrue(np.all(np.arange(1,7) - Tabulation._xmerge(x1, x2) == 0))
+        self.assertTrue(np.all(np.arange(1, 7) - Tabulation._xmerge(x1, x2) == 0))
 
         # Test xmerge with non-overlapping domains (with floats)
         x1 = np.array([1., 2., 3.])
@@ -544,7 +544,7 @@ class Test_Tabulation(unittest.TestCase):
 #         with self.assertRaises(ValueError) as context:
 #             Tabulation._xmerge(x1, x2)
 #         self.assertEqual(str(context.exception), "domains do not overlap")
-        self.assertTrue(np.all(np.arange(1,7) - Tabulation._xmerge(x1, x2) == 0))
+        self.assertTrue(np.all(np.arange(1, 7) - Tabulation._xmerge(x1, x2) == 0))
 
         # QUANTILE, INTEGRATE with limits
 
@@ -668,19 +668,19 @@ class Test_Tabulation(unittest.TestCase):
         self.assertRaises(ValueError, Tabulation, [0., 1., 2., np.nan], np.arange(4))
 
         with self.assertRaises(ValueError) as context:
-            t = Tabulation([0., 1., 2., np.nan], np.arange(4))
+            Tabulation([0., 1., 2., np.nan], np.arange(4))
         self.assertIn('NaNs', str(context.exception))
 
         with self.assertRaises(ValueError) as context:
-            t = Tabulation([0., 1., 2., np.inf], np.arange(4))
+            Tabulation([0., 1., 2., np.inf], np.arange(4))
         self.assertIn('infinities', str(context.exception))
 
         with self.assertRaises(ValueError) as context:
-            t = Tabulation(np.arange(4), [0., 1., 2., np.nan])
+            Tabulation(np.arange(4), [0., 1., 2., np.nan])
         self.assertIn('NaNs', str(context.exception))
 
         with self.assertRaises(ValueError) as context:
-            t = Tabulation(np.arange(4), [0., 1., 2., np.inf])
+            Tabulation(np.arange(4), [0., 1., 2., np.inf])
         self.assertIn('infinities', str(context.exception))
 
         tab = Tabulation([0, 1, 1, 2], [2, 4, 1, 3])
@@ -716,8 +716,8 @@ class Test_Tabulation(unittest.TestCase):
         self.assertEqual(list(tab._y), [0, 2, 4, 1, 5, 0])
 
         # Add with non-overlapping domains should work now
-        tab1 = Tabulation(np.arange(4), [2,5,3,4])
-        tab2 = Tabulation(np.arange(5,9), [6,3,4,2])
+        tab1 = Tabulation(np.arange(4), [2, 5, 3, 4])
+        tab2 = Tabulation(np.arange(5, 9), [6, 3, 4, 2])
         tsum = tab1 + tab2
         self.assertEqual(tsum.domain(), (0, 8))
         self.assertEqual(tsum(-1.e-9), 0.)
@@ -732,11 +732,10 @@ class Test_Tabulation(unittest.TestCase):
 
         # __eq__
         tab1 = Tabulation(np.arange(10), np.arange(10))
-        tab2 = Tabulation([0,9], [0,9])
+        tab2 = Tabulation([0, 9], [0, 9])
         self.assertEqual(tab1, tab2)
         self.assertTrue(tab1 == tab2)
         self.assertFalse(tab1 != tab2)
 
         self.assertFalse(tab1 == 'abc')
         self.assertFalse(tab1 == 5)
-
